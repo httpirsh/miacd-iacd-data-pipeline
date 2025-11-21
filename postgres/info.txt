@@ -1,0 +1,10 @@
+# Aceder ao pgAdmin (interface web)
+# http://localhost:5050
+# Login: admin@admin.com / admin
+
+# configuração - adicionar servidor:
+# Name: CO2 Database
+# Host: postgres-db
+# Port: 5432
+# Username: postgres
+# Password: postgres
