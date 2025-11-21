@@ -17,7 +17,7 @@ spec:
         image: confluentinc/cp-zookeeper:7.3.0
         ports:
         - containerPort: 2181
-        environment:
+        env:
         - name: ZOOKEEPER_CLIENT_PORT
           value: "2181"
         - name: ZOOKEEPER_TICK_TIME
