@@ -23,6 +23,7 @@ def preprocess_co2_data(input_path: str, output_path: str):
 
     # we'll filter the records to include only data from 1950 onwards. 
     df_final = df_filtered[df_filtered['year'] >= 1950].copy()
+    df_final = df_final[df_final['year'] <= 2022].copy()
 
     # time to save our work! 
     output_dir = os.path.dirname(output_path)

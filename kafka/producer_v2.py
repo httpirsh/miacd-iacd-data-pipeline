@@ -3,55 +3,45 @@ from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 import json
 import time
+import os
 
-#  json serialization method
 def json_serializer(data):
     return json.dumps(data).encode("utf-8")
 
-"""
 def connect_kafka_producer():
-    producerr = None
-    while producerr is None:
+    kafka_broker = os.getenv('KAFKA_BROKER', 'kafka:9092')
+    
+    for i in range(10):  # try up to 10 times
         try:
-            producerr = KafkaProducer(
-                bootstrap_servers='kafka:9092',
-                value_serializer=json_serializer
+            producer = KafkaProducer(
+                bootstrap_servers=kafka_broker,
+                value_serializer=json_serializer,
             )
-            print("Conectado ao Kafka com sucesso!")
+            print(f" connected to Kafka at {kafka_broker}")
+            return producer
         except NoBrokersAvailable:
-            print("waiting for kafka broker")
-            time.sleep(5)  
-    return producerr
+            print(f"Kafka broker not available (attempt {i+1}/10)...")
+            time.sleep(5)
+    
+    raise Exception("could not connect to Kafka after several attempts")
 
+df = pd.read_csv('./data/reduced_co2.csv')
 producer = connect_kafka_producer()
-"""
-producer = KafkaProducer(
-    bootstrap_servers='kafka:9092',
-    value_serializer=json_serializer
-)
 
-
-#df = pd.read_csv('./data/reduced_co2.csv')
-df = pd.read_csv('/app/data/reduced_co2.csv')
-
-TOPIC_NAME = 'emissions-topic'
-print(f"initing data sending to topic '{TOPIC_NAME}'")
-print("press ctrl+c to stop the producer")
+topic = 'emissions-topic'
+print(f"starting to send to topic '{topic}'")
 
 try:
     while True:
         for index, row in df.iterrows():
-            message = row.to_dict() # each row of df as a dict
-            producer.send(TOPIC_NAME, value=message)  # send the msg data to topic
-            
-            # our feedback
-            print(f"sended: {message['country']} - {message['year']}")
-            
-            time.sleep(0.5) # half second
-    
-        print("end of dataset, restarting...")
-        time.sleep(10)  # wait 10 seconds before restarting the dataset sending
+            message = row.to_dict()
+            producer.send(topic, value=message)
+            print(f"sent: {message.get('country', 'N/A')} - {message.get('year', 'N/A')}")
+            time.sleep(0.5)
+        
+        print("finished dataset, restarting in 10 seconds...")
+        time.sleep(10)
 except KeyboardInterrupt:
-    print("producer stopped")
+    print("producer interrupted by user")
 finally:
     producer.close()
