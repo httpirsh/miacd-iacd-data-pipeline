@@ -3,7 +3,7 @@ dps apagar --
 1. Kafka Producer
 Lê um dataset de emissões de CO2 (ficheiro CSV)
 
-Envia cada linha do dataset para um tópico Kafka (emissions-topic) em formato JSON
+Envia cada linha do dataset para um tópico Kafka (co2-raw) em formato JSON
 
 O producer está a funcionar e a enviar dados continuamente (em loop)
 

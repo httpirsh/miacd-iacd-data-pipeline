@@ -1,10 +1,16 @@
-# Aceder ao pgAdmin (interface web)
+# PostgreSQL Connection Information
+
+# Access via pgAdmin (web interface)
 # http://localhost:5050
 # Login: admin@admin.com / admin
 
-# configuração - adicionar servidor:
+# Server configuration:
 # Name: CO2 Database
-# Host: postgres-db
+# Host: postgres (for Docker Compose) or postgres.default.svc.cluster.local (for Kubernetes)
 # Port: 5432
-# Username: postgres
-# Password: postgres
+# Database: co2_data
+# Username: co2_user
+# Password: co2_password
+
+# Direct connection via psql:
+# PGPASSWORD=co2_password psql -h localhost -U co2_user -d co2_data

@@ -19,11 +19,11 @@ spec:
         - containerPort: 5432
         env:
         - name: POSTGRES_DB
-          value: "co2_emissions"
+          value: "co2_data"
         - name: POSTGRES_USER
-          value: "postgres"
+          value: "co2_user"
         - name: POSTGRES_PASSWORD
-          value: "postgres"
+          value: "co2_password"
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data

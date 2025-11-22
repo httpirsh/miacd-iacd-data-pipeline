@@ -7,4 +7,4 @@ spec:
     - ReadWriteOnce # O volume pode ser montado como leitura-escrita por um único nó
   resources:
     requests:
-      storage: 1Gi # Pedimos 1 Gigabyte de armazenamento
+      storage: 5Gi # 5 Gigabytes of storage for PostgreSQL data
