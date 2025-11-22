@@ -1,3 +1,6 @@
+-- Database: co2_data (matching your original setup)
+-- User: co2_user / co2_password
+
 -- Tabela para armazenar os resultados do clustering
 CREATE TABLE IF NOT EXISTS co2_clusters (
     id SERIAL PRIMARY KEY,

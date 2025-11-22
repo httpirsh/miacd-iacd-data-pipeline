@@ -9,7 +9,8 @@ def json_serializer(data):
     return json.dumps(data).encode("utf-8")
 
 def connect_kafka_producer():
-    kafka_broker = os.getenv('KAFKA_BROKER', 'kafka:9092')
+    # Use 'kafka' for simple Zookeeper setup, 'kafka.default.svc.cluster.local' for KRaft
+    kafka_broker = os.getenv('KAFKA_BROKER', 'kafka.default.svc.cluster.local:9092')
     
     for i in range(10):  # try up to 10 times
         try:
