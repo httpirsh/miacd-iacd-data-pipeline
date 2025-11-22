@@ -26,7 +26,7 @@ def connect_kafka_producer():
     
     raise Exception("could not connect to Kafka after several attempts")
 
-df = pd.read_csv('./data/reduced_co2.csv')
+df = pd.read_csv('../data/reduced_co2.csv')
 
 producer = connect_kafka_producer()
 
