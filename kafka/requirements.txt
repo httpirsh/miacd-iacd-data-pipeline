@@ -1,2 +1,0 @@
-kafka-python==2.0.2
-pandas==2.3.3  # para chamar o csv
