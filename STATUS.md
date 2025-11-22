@@ -32,14 +32,12 @@
 
 ## 📁 Project Files Status (SIMPLIFIED)
 
-✅ **Data**: `reduced_co2.csv` (1.2MB, 23,405 rows, 1900-2014, 7 columns)  
+✅ **Data**: `reduced_co2.csv` (1.2MB, 23,405 rows, 1900-2014, 7 columns) - *Excluded from git*  
 ✅ **Kafka Producer**: `kafka/producer.py` (topic: co2-raw)  
-✅ **Spark Jobs**: 2 scripts only
-   - `consumer.py` - Kafka → PostgreSQL streaming (7-col schema)
-   - `batch_processing.py` - CSV → PostgreSQL batch load
-✅ **SQL Schema**: `sql/schema.sql` (7 columns, 3 tables, 3 views, 139 lines)  
-✅ **Kubernetes Manifests**: All 5 deployed and running
-✅ **Deployment Method**: Kubernetes-only (Docker Compose removed)
+✅ **Spark Consumer**: `spark/consumer.py` - Kafka → PostgreSQL streaming (saves to raw_emissions)  
+✅ **PostgreSQL Schema**: `postgres/init.sql` (3 tables: raw_emissions, country_summary, yearly_summary + 3 views)  
+✅ **Kubernetes Manifests**: All 7 files deployed and configured
+✅ **Deployment Method**: Kubernetes-only (Docker Compose available as alternative)
 
 ## 🔧 Database Configuration
 

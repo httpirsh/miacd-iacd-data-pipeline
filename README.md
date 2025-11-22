@@ -42,12 +42,10 @@ A complete data engineering pipeline for analyzing global CO2 emissions using **
 ```
 CSV (23K rows, 7 cols) → Kafka Producer → Kafka Topic (co2-raw)
                               ↓
-                        Spark Consumer → PostgreSQL (3 tables)
+                        Spark Consumer → PostgreSQL (raw_emissions table)
                               ↓
                         Superset Dashboards
 ```
-
-**Alternative**: Direct batch load via `batch_processing.py` (CSV → Spark → PostgreSQL)
 
 ---
 
@@ -74,29 +72,44 @@ CSV (23K rows, 7 cols) → Kafka Producer → Kafka Topic (co2-raw)
 
 ```
 project/
-├── README.md                   # This file - Project overview
-├── STATUS.md                   # Current deployment status & next steps
-├── data/
-│   ├── owid-co2-data.csv       # Original dataset (14MB, archived)
-│   └── reduced_co2.csv         # 7 columns, 23,405 rows (1900-2014)
+├── README.md                      # This file - Project overview
+├── STATUS.md                      # Current deployment status & next steps
+├── ANALYSIS.md                    # Complete data analysis and insights
+├── SUPERSET_SETUP.md              # Superset dashboard setup guide
+├── DASHBOARD_QUICK_START.md       # Quick reference for charts
+├── aux.md                         # Additional notes
+├── .gitignore                     # Git ignore rules
+├── docker-compose.yml             # Docker Compose (alternative to K8s)
 ├── scripts/
-│   └── extract_reduced.py      # Dataset extraction & filtering
+│   ├── extract_reduced.py         # Dataset extraction & filtering script
+│   └── eda.ipynb                  # Exploratory Data Analysis notebook
 ├── kafka/
-│   ├── producer.py             # Kafka producer (→ co2-raw topic)
-│   └── requirements.txt
+│   ├── producer.py                # Kafka producer (→ co2-raw topic)
+│   ├── Dockerfile                 # Kafka producer container
+│   └── requirements.txt           # Python dependencies
 ├── spark/
-│   ├── consumer.py             # Kafka → PostgreSQL streaming
-│   ├── batch_processing.py     # CSV → PostgreSQL batch load
-│   └── requirements.txt
-├── sql/
-│   └── schema.sql              # 7 columns, 3 tables, 3 views
-└── kubernetes/                 # Deployment manifests
-    ├── kafka-kraft.yaml
-    ├── postgres.yaml
-    ├── spark-master.yaml
-    ├── spark-worker.yaml
-    └── superset.yaml
+│   ├── consumer.py                # Kafka → PostgreSQL streaming
+│   ├── Dockerfile                 # Spark consumer container
+│   └── requirements.txt           # Python dependencies
+├── postgres/
+│   ├── init.sql                   # Database schema (3 tables, 3 views)
+│   └── info.txt                   # Connection information
+└── kubernetes/                    # Kubernetes deployment manifests
+    ├── 01-postgres-pvc.yaml       # PostgreSQL storage
+    ├── 02-postgres-deploy.yaml    # PostgreSQL deployment
+    ├── 03-postgres-service.yaml   # PostgreSQL service
+    ├── 04-kafka-kraft.yaml        # Kafka in KRaft mode
+    ├── 05-spark-master.yaml       # Spark master
+    ├── 06-spark-worker.yaml       # Spark worker
+    └── 07-superset.yaml           # Superset dashboard
 ```
+
+**Note on Data Files:**
+- The `data/` directory contains the dataset files and is excluded from git (see `.gitignore`)
+- Original dataset: [Our World in Data - CO2 Emissions](https://github.com/owid/co2-data)
+- Download `owid-co2-data.csv` and use `scripts/extract_reduced.py` to generate the reduced dataset
+- `reduced_co2.csv`: 23,405 rows × 7 columns (1900-2014, filtered)
+
 
 ---
 
@@ -115,11 +128,15 @@ minikube start --cpus=2 --memory=4096
 ### 2. Deploy all components
 ```bash
 cd kubernetes
-kubectl apply -f kafka-kraft.yaml
-kubectl apply -f postgres.yaml
-kubectl apply -f spark-master.yaml
-kubectl apply -f spark-worker.yaml
-kubectl apply -f superset.yaml
+kubectl apply -f 01-postgres-pvc.yaml
+kubectl apply -f 02-postgres-deploy.yaml
+kubectl apply -f 03-postgres-service.yaml
+kubectl apply -f 04-kafka-kraft.yaml
+kubectl apply -f 05-spark-master.yaml
+kubectl apply -f 06-spark-worker.yaml
+kubectl apply -f 07-superset.yaml
+# Or apply all at once:
+# kubectl apply -f kubernetes/
 ```
 
 ### 3. Wait for pods to be ready
@@ -130,8 +147,14 @@ kubectl get pods -w
 
 ### 4. Initialize PostgreSQL schema
 ```bash
-kubectl port-forward postgres-0 5432:5432 &
-PGPASSWORD=co2_password psql -h localhost -U co2_user -d co2_data -f sql/schema.sql
+# Get the PostgreSQL pod name
+POSTGRES_POD=$(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}')
+
+# Copy the init.sql file to the pod
+kubectl cp postgres/init.sql $POSTGRES_POD:/tmp/init.sql
+
+# Execute the schema
+kubectl exec -it $POSTGRES_POD -- psql -U co2_user -d co2_data -f /tmp/init.sql
 ```
 
 ### 5. Create Kafka topic
@@ -142,18 +165,33 @@ kubectl exec -it kafka-0 -- kafka-topics.sh \
   --partitions 3 --replication-factor 1
 ```
 
-### 6. Load data (Option A: Batch)
+### 6. Load data via Kafka streaming
 ```bash
-# Get Spark master pod name
+# The Kafka producer reads from data/reduced_co2.csv (not included in repo)
+# Download the dataset first:
+# wget https://github.com/owid/co2-data/raw/master/owid-co2-data.csv -O data/owid-co2-data.csv
+
+# Create data directory if it doesn't exist
+mkdir -p data/
+
+# Run the extraction script to create reduced_co2.csv
+python scripts/extract_reduced.py
+
+# Port-forward Kafka to localhost
+kubectl port-forward kafka-0 9092:9092 &
+
+# Run the Kafka producer (from local machine)
+cd kafka
+pip install -r requirements.txt
+python producer.py
+
+# In another terminal, submit the Spark consumer
 SPARK_POD=$(kubectl get pods -l app=spark-master -o jsonpath='{.items[0].metadata.name}')
-
-# Copy CSV file
-kubectl cp data/reduced_co2.csv $SPARK_POD:/tmp/
-
-# Run batch processing
+kubectl cp consumer.py $SPARK_POD:/tmp/
 kubectl exec -it $SPARK_POD -- spark-submit \
   --master spark://spark-master:7077 \
-  /opt/spark-apps/batch_processing.py
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.7.0 \
+  /tmp/consumer.py
 ```
 
 ### 7. Access Superset

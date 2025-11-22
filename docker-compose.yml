@@ -60,12 +60,12 @@ services:
       - spark-checkpoints:/tmp/checkpoints
 
   postgres:
-    image: postgres:13
+    image: postgres:15-alpine
     container_name: postgres-db
     environment:
-      POSTGRES_DB: co2_emissions
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: co2_data
+      POSTGRES_USER: co2_user
+      POSTGRES_PASSWORD: co2_password
     networks:
       - kafka-net
     ports:

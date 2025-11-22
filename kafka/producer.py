@@ -30,7 +30,7 @@ df = pd.read_csv('../data/reduced_co2.csv')
 
 producer = connect_kafka_producer()
 
-topic = 'emissions-topic'
+topic = 'co2-raw'
 print(f"starting to send to topic '{topic}'")
 
 try:
