@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
 # this script is a Python alternative to the 'eda.ipynb' notebook
-# its  goal is to perform the necessary data extraction and preprocessing steps
+# its goal is to perform the necessary data extraction and preprocessing steps
 # to generate the final, reduced dataset directly, without the need for manual exploratory analysis
+#
+# the output dataset (reduced_co2.csv) will be used by:
+# - kafka/producer.py: to stream data into Kafka topic "emissions-topic"
+# - spark/consumer.py: to perform K-means clustering (k=3) and store results in PostgreSQL
+# - postgres database: co2_emissions (user: postgres, password: postgres)
 
 import pandas as pd
 import os
@@ -21,9 +26,9 @@ def preprocess_co2_data(input_path: str, output_path: str):
         
     df_filtered = df[columns_to_keep]
 
-    # we'll filter the records to include only data from 1950 onwards. 
-    df_final = df_filtered[df_filtered['year'] >= 1950].copy()
-    df_final = df_final[df_final['year'] <= 2022].copy()
+    # we'll filter the records to include only data from 1900 onwards (up to 2024). 
+    df_final = df_filtered[df_filtered['year'] >= 1900].copy()
+    df_final = df_final[df_filtered['year'] <= 2024].copy()
 
     # time to save our work! 
     output_dir = os.path.dirname(output_path)
