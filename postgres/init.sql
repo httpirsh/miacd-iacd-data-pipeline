@@ -8,10 +8,10 @@ CREATE TABLE IF NOT EXISTS raw_emissions (
     country VARCHAR(100),
     year INTEGER,
     iso_code VARCHAR(10),
-    population BIGINT,
-    gdp DECIMAL(20,2),
-    co2 DECIMAL(15,4),
-    co2_per_capita DECIMAL(10,4),
+    population DOUBLE PRECISION,
+    gdp DOUBLE PRECISION,
+    co2 DOUBLE PRECISION,
+    co2_per_capita DOUBLE PRECISION,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -20,10 +20,10 @@ CREATE TABLE IF NOT EXISTS country_summary (
     id SERIAL PRIMARY KEY,
     country VARCHAR(100),
     iso_code VARCHAR(10),
-    total_co2 DECIMAL(20,4),
-    avg_co2_per_capita DECIMAL(10,4),
+    total_co2 DOUBLE PRECISION,
+    avg_co2_per_capita DOUBLE PRECISION,
     latest_year INTEGER,
-    latest_co2 DECIMAL(15,4),
+    latest_co2 DOUBLE PRECISION,
     data_points INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -32,10 +32,10 @@ CREATE TABLE IF NOT EXISTS country_summary (
 CREATE TABLE IF NOT EXISTS yearly_summary (
     id SERIAL PRIMARY KEY,
     year INTEGER,
-    total_global_co2 DECIMAL(20,4),
-    avg_co2_per_capita DECIMAL(10,4),
+    total_global_co2 DOUBLE PRECISION,
+    avg_co2_per_capita DOUBLE PRECISION,
     country_count INTEGER,
-    growth_rate DECIMAL(10,2),
+    growth_rate DOUBLE PRECISION,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
