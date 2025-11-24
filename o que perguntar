@@ -2,3 +2,7 @@
 2. precisamos de eliminar os misisng values no spark - por exemplo há muitos valores sem pib que nao fazem sentido
 3. como verificamos se está tudo a funcionar bem? por exemplo, o postgres
 4. no que consiste o spark master e worker? o que nos acrescenta?
+5. já nao precisamos de requeriments.txt na raiz do projeto, uma vez que estamos a usar dockerfiles? 
+ou precisamos? é por causa do jupyter notebook?
+6. o iso_code quando esta vazio "NaN" significa que não é um pais, pode ser o mundo, ou a europa, etc... nao sei como devo tratar disto
+7. quando tiver tudo bom --> atualizar read me

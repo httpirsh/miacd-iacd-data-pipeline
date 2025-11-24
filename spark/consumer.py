@@ -22,11 +22,9 @@ schema = StructType([
 ])
 
 def save_to_postgresql(df, batch_id, table_name):
-    """
-    Função para guardar DataFrame no PostgreSQL
-    """
-    try:
-        # Configuração de conexão com PostgreSQL
+
+    try:  # lets try to save the data to PostgreSQL
+
         jdbc_url = "jdbc:postgresql://postgres:5432/co2_emissions"
         connection_properties = {
             "user": "postgres",
@@ -34,7 +32,6 @@ def save_to_postgresql(df, batch_id, table_name):
             "driver": "org.postgresql.Driver"
         }
         
-        # Escrever no PostgreSQL
         df.write.mode("append").jdbc(url=jdbc_url, table=table_name, properties=connection_properties)
         
         print(f"batch {batch_id} saved to PostgreSQL table '{table_name}' ({df.count()} records)")
@@ -54,61 +51,58 @@ def process_clustering(batch_df, batch_id):
     
     print(f"processing batch {batch_id} with {record_count} records")
     
-    try:
+    try:  # lets try to process the data
         all_data = batch_df
         
-        # Mostrar estatísticas dos dados recebidos
+        # statistics of the data
         print(f"year range in batch: {all_data.agg({'year': 'min'}).collect()[0][0]} - {all_data.agg({'year': 'max'}).collect()[0][0]}")
         print(f"unique countries in batch: {all_data.select('country').distinct().count()}")
         
-        # ✅ CORREÇÃO: Agrupar por país com dados completos
+        # group by country with complete data
         country_stats = all_data.groupBy("country", "iso_code").agg(
             avg("co2").alias("avg_co2"),
             avg("co2_per_capita").alias("avg_co2_per_capita"),
             avg("gdp").alias("avg_gdp"),
             avg("population").alias("avg_population"),
             count_func("*").alias("data_points"),
-            avg("year").alias("avg_year")  # Para entender a temporalidade dos dados
+            avg("year").alias("avg_year")  # to understand the temporal range of the data
         ).filter(
-            # ✅ Apenas países com dados razoáveis
             (col("avg_co2").isNotNull()) &
             (col("avg_co2_per_capita").isNotNull()) &
-            (col("data_points") >= 5)  # Pelo menos 5 anos de dados
+            (col("data_points") >= 5)  # at least 5 years of data
         )
         
         countries_count = country_stats.count()
         #print(f"countries with sufficient data: {countries_count}")
         
-        if countries_count < 3:
+        if countries_count < 3: # we need at least 3 countries to perform clustering    
             print(f"batch {batch_id}: not enough countries for clustering (need 3, got {countries_count})")
             
-            # Guardar dados para análise mesmo sem clustering
+            # save data for debugging
             debug_data = country_stats.withColumn("batch_id", lit(batch_id))
             save_to_postgresql(debug_data, batch_id, "debug_country_stats")
             return
         
-        # ✅ MOSTRAR ALGUNS DADOS PARA DEBUG
-        print("sample country statistics:")
+        print("sample country statistics:")  # lets see some data for debugging
         country_stats.orderBy(col("avg_co2").desc()).show(5)
         
-        # Preparar features
+        # prepare features
         feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
         assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
         
-        # Remover valores nulos
-        cleaned_data = country_stats.na.drop()
+        cleaned_data = country_stats.na.drop()  # bye bye null values
         
         if cleaned_data.count() < 3:
             print(f"batch {batch_id}: not enough data after cleaning")
             return
         
-        # Escalar features
+        # scale features
         scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
         
-        # K-means com k dinâmico (2-4 clusters)
+        # K-means with dynamic k (2-4 clusters)
         #k = min(4, max(2, cleaned_data.count() // 3)) 
-        k=3 # Entre 2-4 clusters
-        print(f"🎯 Using {k} clusters for {cleaned_data.count()} countries")
+        k = 3 
+        print(f"{k} clusters for {cleaned_data.count()} countries")
         
         kmeans = KMeans(
             k=k, 
@@ -118,22 +112,17 @@ def process_clustering(batch_df, batch_id):
             maxIter=20
         )
         
-        # Pipeline
         pipeline = Pipeline(stages=[assembler, scaler, kmeans])
-        
-        # Treinar modelo
-        model = pipeline.fit(cleaned_data)
-        
-        # Aplicar modelo
+        model = pipeline.fit(cleaned_data)  # train the model
         results = model.transform(cleaned_data)
         
-        # Preparar dados para PostgreSQL (Removido data_points e avg_year pois não existem na tabela)
+        # prepare data for PostgreSQL
         results_for_db = results.select(
             "country", "iso_code", "avg_co2", "avg_co2_per_capita", 
             "avg_gdp", "avg_population", "cluster"
         ).withColumn("batch_id", lit(batch_id))
         
-        # Estatísticas dos clusters (Removido avg_population_cluster pois não existe na tabela)
+        # statistics of the clusters
         cluster_stats = results.groupBy("cluster").agg(
             count_func("*").alias("num_countries"),
             avg("avg_co2").alias("avg_co2_cluster"),
@@ -141,7 +130,6 @@ def process_clustering(batch_df, batch_id):
             avg("avg_gdp").alias("avg_gdp_cluster")
         ).withColumn("batch_id", lit(batch_id))
         
-        # Mostrar resultados        
         print("cluster statistics:")
         cluster_stats.show()
         
@@ -154,7 +142,6 @@ def process_clustering(batch_df, batch_id):
             print(f"cluster {cluster_id} (top 5 by CO2):")
             cluster_countries.show(5, truncate=False)
         
-        # Guardar no PostgreSQL
         print("saving to postgreSQL!!")
         save_to_postgresql(results_for_db, batch_id, "co2_clusters")
         save_to_postgresql(cluster_stats, batch_id, "cluster_stats")
@@ -166,12 +153,12 @@ def process_clustering(batch_df, batch_id):
         print(f"error in batch {batch_id}: {str(e)}")
 
 
-# 3. Ler os Dados do Kafka com configuração específica
 def create_kafka_stream():
+    # read data from kafka
     print("connecting to kafka...")
     
     try:
-        # Configuração específica para forçar conexão correcta
+        # specific configuration to force correct connection
         kafka_df = spark.readStream \
             .format("kafka") \
             .option("kafka.bootstrap.servers", "kafka:9092") \
@@ -183,13 +170,13 @@ def create_kafka_stream():
         
         print("connected to Kafka at kafka:9092")
         
-        # Transformar os dados JSON
+        # transform json data
         json_df = kafka_df.selectExpr("CAST(value AS STRING) as json_string")
         processed_stream_df = json_df.select(
             from_json(col("json_string"), schema).alias("data")
         ).select("data.*")
         
-        # Filtrar e limpar dados
+        # filter and clean data --- ja nao tinhamos feito isto antes?
         filtered_df = processed_stream_df.filter(
             (col("year").isNotNull()) & 
             (col("co2").isNotNull()) &
@@ -206,14 +193,14 @@ def create_kafka_stream():
 
 # 4. Iniciar o Stream Processing
 try:
-    print("📊 Source: Kafka topic 'emissions-topic'")
-    print(" --> kafka:9092")
+    print("kafka topic 'emissions-topic'")
+    print("--> kafka:9092")
     print("--> database: PostgreSQL (co2_emissions)")
     print("processing: Every 15 seconds")
     
     kafka_stream = create_kafka_stream()
     
-    # Iniciar o processamento com clustering
+    # start clustering
     query = kafka_stream.writeStream \
         .outputMode("update") \
         .foreachBatch(process_clustering) \
