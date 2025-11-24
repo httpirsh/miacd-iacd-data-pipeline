@@ -20,6 +20,7 @@ def connect_kafka_producer():
             )
             print(f" connected to Kafka at {kafka_broker}")
             return producer
+            
         except NoBrokersAvailable:
             print(f"kafka broker not available (attempt {i+1}/10)...")
             time.sleep(5)
@@ -54,7 +55,9 @@ try:
         
         print("finished dataset, restarting in 10 seconds...")
         time.sleep(10)
+
 except KeyboardInterrupt:
     print("producer interrupted by user")
+
 finally:
     producer.close()

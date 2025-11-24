@@ -17,7 +17,7 @@ spec:
       containers:
       - name: consumer
         image: spark-consumer:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         env:
         # Garante que o output do Python aparece nos logs imediatamente
         - name: PYTHONUNBUFFERED

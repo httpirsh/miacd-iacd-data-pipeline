@@ -1,0 +1,4 @@
+1. precisamos de namespace nos kubernetes? o que é isso?
+2. precisamos de eliminar os misisng values no spark - por exemplo há muitos valores sem pib que nao fazem sentido
+3. como verificamos se está tudo a funcionar bem? por exemplo, o postgres
+4. no que consiste o spark master e worker? o que nos acrescenta?
