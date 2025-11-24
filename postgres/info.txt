@@ -1,4 +1,4 @@
-# Aceder ao pgAdmin (interface web)
+# aceder ao pgAdmin (web)
 # http://localhost:5050
 # Login: admin@admin.com / admin
 

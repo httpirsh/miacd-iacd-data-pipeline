@@ -21,12 +21,23 @@ def connect_kafka_producer():
             print(f" connected to Kafka at {kafka_broker}")
             return producer
         except NoBrokersAvailable:
-            print(f"Kafka broker not available (attempt {i+1}/10)...")
+            print(f"kafka broker not available (attempt {i+1}/10)...")
             time.sleep(5)
     
     raise Exception("could not connect to Kafka after several attempts")
 
-df = pd.read_csv('../data/reduced_co2.csv')
+dir_script = os.path.dirname(os.path.abspath(__file__))  # detect if is in container or local
+# dir_script = '/app' (container) or '/caminho/projeto/kafka' (local)
+
+dir_csv = os.path.join(dir_script, 'data', 'reduced_co2.csv')
+# dir_csv = '/app/data/reduced_co2.csv' (container)
+
+if not os.path.exists(dir_csv):  # se estiver em local! (mas não é suposto)
+    dir_csv = os.path.join(os.path.dirname(dir_script), 'data', 'reduced_co2.csv')
+    # dir_csv = '/caminho/projeto/kafka/data/reduced_co2.csv' (local)
+
+df = pd.read_csv(dir_csv)
+print(f"loaded {len(df)} records from {dir_csv}")
 
 producer = connect_kafka_producer()
 
