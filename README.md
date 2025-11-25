@@ -370,4 +370,4 @@ kubectl logs -l app=spark-worker --follow
 
 ---
 
-**Last Updated**: November 22, 2025
+**Last Updated**: November 25, 2025
