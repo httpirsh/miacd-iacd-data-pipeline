@@ -1,7 +1,7 @@
--- Database: co2_data (matching your original setup)
--- User: co2_user / co2_password
+-- database: co2_data (matching your original setup)
+-- user: postgres / postgres
 
--- Tabela para armazenar os resultados do clustering
+-- table to store the clustering results
 CREATE TABLE IF NOT EXISTS co2_clusters (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS co2_clusters (
     processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabela para estatísticas dos clusters
+-- table to store cluster statistics
 CREATE TABLE IF NOT EXISTS cluster_stats (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER,
@@ -27,12 +27,12 @@ CREATE TABLE IF NOT EXISTS cluster_stats (
     processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Índices para melhor performance
+-- indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_co2_clusters_country ON co2_clusters(country);
 CREATE INDEX IF NOT EXISTS idx_co2_clusters_cluster ON co2_clusters(cluster);
 CREATE INDEX IF NOT EXISTS idx_co2_clusters_batch ON co2_clusters(batch_id);
 
--- View para análise dos clusters
+-- view for cluster analysis
 CREATE OR REPLACE VIEW cluster_analysis AS
 SELECT 
     cluster,
@@ -43,9 +43,3 @@ SELECT
 FROM co2_clusters
 GROUP BY cluster
 ORDER BY cluster;
-
--- Inserir dados de teste
--- INSERT INTO co2_clusters (batch_id, country, iso_code, avg_co2, avg_co2_per_capita, avg_gdp, avg_population, cluster)
--- VALUES 
--- (0, 'Test Country', 'TST', 100.5, 2.5, 50000.0, 40000000.0, 0)
--- ON CONFLICT DO NOTHING;

@@ -2,9 +2,7 @@
 
 A complete data engineering pipeline for analyzing global CO2 emissions with **K-means clustering** using **Kafka, Spark, PostgreSQL, and Superset** deployed on **Kubernetes**.
 
----
-
-## 📊 Project Overview
+## Project Overview
 
 ### Dataset
 **Source:** Our World in Data - CO2 Emissions Dataset
@@ -17,7 +15,7 @@ A complete data engineering pipeline for analyzing global CO2 emissions with **K
 | **Time Range** | 1750-2024 | 1900-2024 (125 years) |
 | **Data Quality** | Sparse pre-1900 | Dense, complete |
 
-### Selected Variables (7 columns)
+### Selected Variables
 1. `country` - Country name
 2. `year` - Year (1900-2024)
 3. `iso_code` - ISO 3-letter country code
@@ -28,9 +26,7 @@ A complete data engineering pipeline for analyzing global CO2 emissions with **K
 
 **Rationale**: Focused on time-series analysis, country comparisons, GDP-emissions correlation, and geographic visualizations. Pre-1900 data was removed due to significant gaps and missing values.
 
----
-
-## 🏗️ Architecture
+## Architecture
 
 ### Components
 1. **Apache Kafka (KRaft mode)** - Message broker for streaming (no Zookeeper)
@@ -55,11 +51,9 @@ CSV (23K rows) → Kafka Producer → Kafka Topic (emissions-topic)
 - Persistent storage with PostgreSQL
 - Interactive dashboards with Superset
 
----
+## Database Schema
 
-## 📂 Database Schema
-
-**Database**: `co2_emissions`  
+**Database**: `co2_emissions`
 **Credentials**: `postgres` / `postgres`
 
 ### Tables
@@ -75,38 +69,42 @@ CSV (23K rows) → Kafka Producer → Kafka Topic (emissions-topic)
 ### Views
 - **cluster_analysis** - Comprehensive cluster statistics
 
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 project/
-├── README.md                   # This file - Complete setup guide
+├── README.md                    # Complete setup guide
+├── SUPERSET_SETUP.md            # Superset configuration guide
+├── requirements.txt             # Python dependencies (for local dev/Jupyter)
 ├── data/
-│   ├── owid-co2-data.csv       # Original dataset (14MB)
-│   └── reduced_co2.csv         # 7 columns, 23,405 rows (1900-2024)
+│   ├── owid-co2-data.csv        # Original dataset (14MB, 79 columns)
+│   └── reduced_co2.csv          # Processed: 7 columns, ~19K rows (1950-2024)
 ├── scripts/
-│   ├── eda.ipynb               # Exploratory data analysis
-│   └── extract_reduced.py      # Dataset extraction (1900-2024)
+│   ├── eda.ipynb                # Exploratory data analysis
+│   └── extract_reduced.py       # Dataset extraction script
 ├── kafka/
-│   └── producer.py             # Stream CSV to emissions-topic
+│   ├── Dockerfile               # Kafka producer container image
+│   └── producer.py              # Streams CSV → Kafka topic
 ├── spark/
-│   └── consumer.py             # Kafka → K-means → PostgreSQL
+│   ├── Dockerfile               # Spark consumer container image  
+│   └── consumer.py              # Kafka → NaN cleaning → K-means → PostgreSQL
+├── superset/
+│   └── Dockerfile               # ⚠️ CUSTOM Superset image with PostgreSQL driver
 ├── postgres/
-│   └── init.sql                # Database schema with clustering tables
-└── kubernetes/                 # Deployment manifests (01-07)
-    ├── 01-postgres-pvc.yaml
-    ├── 02-postgres-deploy.yaml
-    ├── 03-postgres-service.yaml
-    ├── 04-kafka-kraft.yaml
-    ├── 05-spark-master.yaml
-    ├── 06-spark-worker.yaml
-    └── 07-superset.yaml
+│   └── init.sql                 # Database schema (co2_clusters, cluster_stats)
+└── kubernetes/                  # K8s deployment manifests (01-09)
+    ├── 01-postgres-pvc.yaml     # Persistent storage for PostgreSQL
+    ├── 02-postgres-deploy.yaml  # PostgreSQL deployment
+    ├── 03-postgres-service.yaml # PostgreSQL service
+    ├── 04-kafka-kraft.yaml      # Kafka (KRaft mode, no Zookeeper)
+    ├── 05-spark-master.yaml     # Spark master deployment
+    ├── 06-spark-worker.yaml     # Spark worker deployment
+    ├── 07-superset.yaml         # Superset with custom image (superset-postgres:v2)
+    ├── 08-kafka-producer.yaml   # Containerized Kafka producer
+    └── 09-spark-consumer.yaml   # Containerized Spark consumer
 ```
 
----
-
-## 🚀 Quick Start Guide
+## Usage
 
 ### Prerequisites
 - Minikube installed
@@ -114,191 +112,117 @@ project/
 - Python 3.8+ with pip
 - Git
 
----
+### Deployment Steps
 
-### Step 1: Start Minikube
+1. **Start Minikube**
+   ```bash
+   minikube start --cpus=4 --memory=8192
+   ```
+
+2. **Build Docker Images**
+   ```bash
+   eval $(minikube docker-env)
+   
+   # Build Kafka producer
+   docker build -t kafka-producer:latest -f kafka/Dockerfile .
+   
+   # Build Spark consumer
+   docker build -t spark-consumer:latest -f spark/Dockerfile .
+   
+   # Build Superset with PostgreSQL driver (REQUIRED!)
+   docker build -t superset-postgres:v2 ./superset
+   ```
+   
+   **Important**: The Superset image MUST be built locally because the official `apache/superset:latest` does NOT include database drivers. Our custom image installs the PostgreSQL driver (`psycopg2-binary`) in the correct virtual environment.
+
+3. **Deploy to Kubernetes**
+   ```bash
+   kubectl apply -f kubernetes/
+   ```
+
+4. **Verify Deployment**
+   Wait for all pods to be in `Running` state:
+   ```bash
+   kubectl get pods -w
+   ```
+
+### Verification
+Check logs to ensure data is flowing:
 ```bash
-minikube start --cpus=4 --memory=8192
+# Kafka Producer
+kubectl logs -l app=kafka-producer --tail=20
+
+# Spark Consumer
+kubectl logs -l app=spark-consumer --tail=50
+
+# PostgreSQL Data
+kubectl exec -it $(kubectl get pods -l app=postgres -o name | head -1) -- \
+  psql -U postgres -d co2_emissions -c "SELECT COUNT(*) FROM co2_clusters;"
 ```
 
----
+### Accessing Services
 
-### Step 2: Deploy Kubernetes Components
+#### Superset Dashboard (Data Visualization)
+
+**⚠️ IMPORTANT: You MUST keep the port-forward terminal open while using Superset!**
+
+1. **Start Port-Forward**:
+   ```bash
+   kubectl port-forward svc/superset 8088:8088
+   ```
+   Leave this terminal open.
+
+2. **Access Superset**:
+   - URL: `http://localhost:8088`
+   - Login: `admin` / `admin`
+
+3. **Connect to PostgreSQL Database**:
+   - Settings → Data: Database Connections → + DATABASE
+   - Select **PostgreSQL**
+   - **SQLALCHEMY URI**: 
+     ```
+     postgresql://postgres:postgres@postgres:5432/co2_emissions
+     ```
+   - Advanced → SQL Lab → Enable all options
+   - Click **TEST CONNECTION** → should show ✅ "Connection looks good!"
+   - Click **CONNECT**
+
+4. **Add Datasets** (Data → Datasets → + Dataset):
+   - `co2_clusters` - Main clustering results
+   - `cluster_stats` - Aggregated cluster statistics
+   - `cluster_analysis` - Comprehensive cluster view
+
+5. **Create Dashboards**:
+   See detailed instructions in [`SUPERSET_SETUP.md`](SUPERSET_SETUP.md)
+
+**Troubleshooting**:
+- If connection fails: verify both port-forwards are running (Superset 8088, PostgreSQL 5432)
+- If "Could not load database driver" error: rebuild Superset image with `docker build -t superset-postgres:v2 ./superset`
+
+#### Spark Master UI
 ```bash
-cd /home/IACD/project/kubernetes
-
-# Deploy in order (01-07)
-kubectl apply -f 01-postgres-pvc.yaml
-kubectl apply -f 02-postgres-deploy.yaml
-kubectl apply -f 03-postgres-service.yaml
-kubectl apply -f 04-kafka-kraft.yaml
-kubectl apply -f 05-spark-master.yaml
-kubectl apply -f 06-spark-worker.yaml
-kubectl apply -f 07-superset.yaml
+kubectl port-forward svc/spark-master 8080:8080
+# Access at http://localhost:8080
 ```
 
----
+## Useful Commands
 
-### Step 3: Wait for All Pods to be Ready
-```bash
-kubectl get pods -w
-# Wait until all 6 pods show "Running" (1-2 minutes)
-# Expected pods: kafka-0, postgres-0, postgres-xxx, spark-master-xxx, spark-worker-xxx, superset-xxx
-```
-
----
-
-### Step 4: Initialize PostgreSQL Database
-```bash
-# Port-forward PostgreSQL
-kubectl port-forward postgres-0 5432:5432 &
-
-# Wait 5 seconds, then initialize schema
-sleep 5
-PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions -f postgres/init.sql
-```
-
----
-
-### Step 5: Install Python Dependencies
-```bash
-cd /home/IACD/project
-pip install kafka-python-ng pandas psycopg2-binary
-```
-
----
-
-### Step 6: Create Kafka Topic
-```bash
-# Port-forward Kafka
-kubectl port-forward kafka-0 9092:9092 &
-
-# Wait 5 seconds, then create topic
-sleep 5
-kubectl exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
-  --create --topic emissions-topic \
-  --partitions 3 --replication-factor 1
-```
-
----
-
-### Step 7: Start Kafka Producer (Streaming Data)
-```bash
-cd /home/IACD/project/kafka
-python producer.py
-# You should see: "sent: Afghanistan - 1949 ✓"
-# Leave this running in the background or press Ctrl+C after a few hundred records
-```
-
----
-
-### Step 8: Run Spark Consumer (ML Clustering)
-```bash
-# Get Spark master pod name
-SPARK_POD=$(kubectl get pods -l app=spark-master -o jsonpath='{.items[0].metadata.name}')
-
-# Copy consumer script to pod
-kubectl cp spark/consumer.py $SPARK_POD:/tmp/consumer.py
-
-# Submit Spark job for K-means clustering
-kubectl exec $SPARK_POD -- spark-submit \
-  --master spark://spark-master:7077 \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
-  /tmp/consumer.py
-```
-
----
-
-### Step 9: Verify Data in PostgreSQL
-```bash
-# Connect to database
-PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions
-
-# Check clustering results
-SELECT COUNT(*) FROM co2_clusters;
-SELECT * FROM cluster_stats;
-SELECT * FROM cluster_analysis;
-```
-
----
-
-### Step 10: Access Superset for Visualization
-```bash
-# Port-forward Superset (if not already running)
-kubectl port-forward svc/superset 8088:8088 &
-
-# Open browser
-# URL: http://localhost:8088
-# Default credentials: admin / admin
-```
-
-**Add PostgreSQL connection in Superset:**
-- Host: `postgres.default.svc.cluster.local`
-- Port: `5432`
-- Database: `co2_emissions`
-- Username: `postgres`
-- Password: `postgres`
-
----
-
-## 🔧 Useful Commands
-
----
-
-## 🔧 Useful Commands
-
-### Check Pod Status
-```bash
-kubectl get pods
-kubectl describe pod <pod-name>
-kubectl logs <pod-name> --follow
-```
-
-### Kafka Commands
+### Kafka
 ```bash
 # List topics
-kubectl exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh \
-  --list --bootstrap-server localhost:9092
+kubectl exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092
 
 # Monitor messages
-kubectl exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic emissions-topic \
-  --from-beginning \
-  --max-messages 10
-
-# Check consumer groups
-kubectl exec kafka-0 -- /opt/kafka/bin/kafka-consumer-groups.sh \
-  --bootstrap-server localhost:9092 \
-  --describe --all-groups
+kubectl exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic emissions-topic --from-beginning --max-messages 10
 ```
 
-### PostgreSQL Commands
+### PostgreSQL
 ```bash
 # Connect to database
 PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions
-
-# Useful queries
-SELECT COUNT(*) FROM co2_clusters;
-SELECT * FROM cluster_stats ORDER BY cluster;
-SELECT * FROM cluster_analysis;
 ```
 
-### Spark Commands
-```bash
-# Port-forward Spark Master UI
-kubectl port-forward svc/spark-master 8080:8080 &
-# Open http://localhost:8080
-
-# Check Spark logs
-kubectl logs -l app=spark-master --follow
-kubectl logs -l app=spark-worker --follow
-```
-
----
-
-## 🧪 ML Clustering Details
+## ML Clustering Details
 
 ### K-means Configuration
 - **Number of clusters (k)**: 3
@@ -311,56 +235,17 @@ kubectl logs -l app=spark-worker --follow
 - **Cluster 1**: Low population, low emissions  
 - **Cluster 2**: High GDP, high per capita emissions
 
----
+## Troubleshooting
 
-## 🛠️ Troubleshooting
+- **Kafka not receiving messages**: Check topic existence and producer logs. Ensure CSV path is correct.
+- **Spark consumer not processing**: Verify PostgreSQL is running and Spark packages are downloaded.
+- **PostgreSQL connection**: Use `postgres` host within K8s, `localhost` with port-forward.
+- **PVC issues**: If stuck terminating, remove finalizers. Check Minikube disk space.
+- **OOM Errors**: Increase Minikube memory or adjust Spark worker config.
 
----
+## Project Status
 
-## 🛠️ Troubleshooting
-
-### Kafka not receiving messages
-- Check if topic exists: `kubectl exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092`
-- Verify port-forward is active: `netstat -an | grep 9092`
-- Check producer logs for connection errors
-- Ensure CSV path is correct: `../data/reduced_co2.csv` when running from `kafka/` directory
-
-### Spark consumer not processing
-- Check PostgreSQL is running: `kubectl get pods | grep postgres`
-- Verify Spark packages downloaded: Check logs for "org.apache.spark:spark-sql-kafka"
-- Monitor Spark Master UI: `kubectl port-forward svc/spark-master 8080:8080`
-- Check consumer logs: `kubectl logs <spark-master-pod> --follow`
-
-### PostgreSQL connection issues
-- Use correct credentials: `postgres` / `postgres` (not co2_user)
-- Database name: `co2_emissions` (not co2_data)
-- For Superset, use internal hostname: `postgres.default.svc.cluster.local`
-- For local access, ensure port-forward is active: `kubectl port-forward postgres-0 5432:5432`
-
-### PVC (storage) issues
-- If PVC stuck in "Terminating": `kubectl patch pvc <pvc-name> -p '{"metadata":{"finalizers":null}}'`
-- Cannot shrink PVC size (only increase allowed)
-- Check Minikube has enough disk: `minikube ssh "df -h"`
-
-### Out of memory errors
-- Increase Minikube resources: `minikube start --cpus=4 --memory=8192`
-- Current Spark config: 512Mi per worker (adjust in `06-spark-worker.yaml` if needed)
-
-### Pod stuck in CrashLoopBackOff
-- Check logs: `kubectl logs <pod-name> --previous`
-- Describe pod: `kubectl describe pod <pod-name>`
-- Common causes: Wrong image version, missing dependencies, insufficient resources
-
-### kafka-python compatibility issues
-- Use `kafka-python-ng` (not kafka-python): `pip install kafka-python-ng`
-- kafka-python 2.0.2 has Python 3.12 compatibility issues
-- kafka-python-ng 2.2.3 is the maintained fork
-
----
-
-## 🎯 Project Status
-
-### Completed ✅
+### Completed
 - Dataset reduced from 79 → 7 columns (1900-2024, 23,405 rows)
 - KRaft Kafka deployment (no Zookeeper)
 - Kafka producer streaming CSV data
@@ -375,20 +260,7 @@ kubectl logs -l app=spark-worker --follow
 - **Scalable**: Kubernetes orchestration with persistent storage
 - **Modern**: kafka-python-ng for Python 3.12+ compatibility
 
----
-
-## 📚 Resources
-
-- [Kafka Documentation](https://kafka.apache.org/documentation/)
-- [Spark MLlib Guide](https://spark.apache.org/docs/latest/ml-clustering.html)
-- [Superset Documentation](https://superset.apache.org/docs/intro)
-- [Dataset Source](https://github.com/owid/co2-data)
-- [Kubernetes Documentation](https://kubernetes.io/docs/home/)
-- [KRaft Mode](https://kafka.apache.org/documentation/#kraft)
-
----
-
-## 👥 Contributors
+## Contributors
 
 **IACD** - Data Engineering Pipeline Project  
 **Technology Stack**: Kafka + Spark + PostgreSQL + Superset on Kubernetes  
@@ -396,4 +268,4 @@ kubectl logs -l app=spark-worker --follow
 
 ---
 
-**Last Updated**: November 22, 2025
+**Last Updated**: November 25, 2025

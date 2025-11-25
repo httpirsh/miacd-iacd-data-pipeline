@@ -39,7 +39,8 @@ spec:
     spec:
       containers:
       - name: superset
-        image: apache/superset:latest
+        image: superset-postgres:v2
+        imagePullPolicy: Never
         ports:
         - containerPort: 8088
           name: http

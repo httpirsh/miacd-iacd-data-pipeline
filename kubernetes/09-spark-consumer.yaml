@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-consumer
+  labels:
+    app: spark-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-consumer
+  template:
+    metadata:
+      labels:
+        app: spark-consumer
+    spec:
+      containers:
+      - name: consumer
+        image: spark-consumer:latest
+        imagePullPolicy: Never  # Usa imagem local do Minikube
+        env:
+        # Garante que o output do Python aparece nos logs imediatamente
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"

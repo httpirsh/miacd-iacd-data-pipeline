@@ -21,14 +21,14 @@ def preprocess_co2_data(input_path: str, output_path: str):
         print(f"input file '{input_path}' was not found")
         return
 
-    # as decided during the exploratory analysis, we don't need all the original columns.
+    # as decided during the exploratory analysis, we dont need all the original columns.
     columns_to_keep = ["country", "year", "iso_code", "population", "gdp", "co2", "co2_per_capita"]
         
     df_filtered = df[columns_to_keep]
 
-    # we'll filter the records to include only data from 1900 onwards (up to 2024). 
+    # well filter the records by date
     df_final = df_filtered[df_filtered['year'] >= 1900].copy()
-    df_final = df_final[df_filtered['year'] <= 2024].copy()
+    df_final = df_final[df_filtered['year'] <= 2022].copy()  # we dont have any values of gtp after 2022
 
     # time to save our work! 
     output_dir = os.path.dirname(output_path)
