@@ -97,7 +97,6 @@ project/
 │   ├── Dockerfile               # Spark consumer container image  
 │   └── consumer.py              # Kafka → NaN cleaning → K-means → PostgreSQL
 ├── postgres/
-│   ├── Dockerfile               # PostgreSQL with init script
 │   └── init.sql                 # Database schema (co2_clusters, cluster_stats)
 └── kubernetes/                  # K8s deployment manifests (01-09)
     ├── 01-postgres-pvc.yaml     # Persistent storage for PostgreSQL
