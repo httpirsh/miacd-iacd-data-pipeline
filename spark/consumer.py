@@ -204,7 +204,7 @@ def process_clustering(batch_df, batch_id):
             temporal_pipeline = Pipeline(stages=[temporal_assembler, temporal_scaler, temporal_kmeans])
             temporal_model = temporal_pipeline.fit(temporal_data)
             temporal_results = temporal_model.transform(temporal_data)
-            
+                
             # Select columns for DB
             temporal_results_db = temporal_results.select(
                 "country", "iso_code", "year", "co2", "co2_per_capita", 
