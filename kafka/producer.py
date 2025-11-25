@@ -53,7 +53,7 @@ try:
             print(f"sent: {message.get('country', 'N/A')} - {message.get('year', 'N/A')}")
             time.sleep(0.03)
         
-        print("finished dataset, restarting in 10 seconds...")
+        print("finished dataset, restarting in 10 seconds")
         time.sleep(10)
 
 except KeyboardInterrupt:

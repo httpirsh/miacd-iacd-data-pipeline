@@ -53,12 +53,43 @@ def process_clustering(batch_df, batch_id):
     
     try:  # lets try to process the data
         all_data = batch_df
+        initial_count = all_data.count()
+        print(f"Initial records in batch: {initial_count}")
+
+        # Convert string "NaN" to NULL for numeric columns
+        # Pandas sends NaN as string "NaN" in JSON, but Spark needs NULL for avg()
+        from pyspark.sql.functions import when
         
-        # statistics of the data
-        print(f"year range in batch: {all_data.agg({'year': 'min'}).collect()[0][0]} - {all_data.agg({'year': 'max'}).collect()[0][0]}")
-        print(f"unique countries in batch: {all_data.select('country').distinct().count()}")
+        numeric_cols = ["gdp", "population", "co2", "co2_per_capita"]
+        for col_name in numeric_cols:
+            all_data = all_data.withColumn(
+                col_name,
+                when((col(col_name) == "NaN") | (col(col_name).isNull()), None)
+                .otherwise(col(col_name).cast("double"))
+            )
         
-        # group by country with complete data
+        # Filter ONLY aggregates (iso_code = NULL, "NaN", or '"NaN"' with quotes)
+        # iso_code NULL or "NaN" means aggregates like "World", "Europe", etc.
+        all_data = all_data.filter(
+            (col("iso_code").isNotNull()) & 
+            (col("iso_code") != "NaN") &
+            (col("iso_code") != '"NaN"')  # Also filter the string with literal quotes
+        )
+        after_iso_filter = all_data.count()
+        removed_aggregates = initial_count - after_iso_filter
+        if removed_aggregates > 0:
+            print(f"Removed {removed_aggregates} aggregate records (World, continents, etc.)")
+        
+        print(f"Records to process: {after_iso_filter}")
+        
+        if after_iso_filter == 0:
+            print(f"Batch {batch_id}: No data after filtering aggregates")
+            return
+        
+        # Note: NaN values will be handled by aggregation (avg ignores NaN)
+        # and then filtered out at line ~121 with country_stats.na.drop()
+        
+        # Group by country with complete data
         country_stats = all_data.groupBy("country", "iso_code").agg(
             avg("co2").alias("avg_co2"),
             avg("co2_per_capita").alias("avg_co2_per_capita"),
@@ -66,11 +97,7 @@ def process_clustering(batch_df, batch_id):
             avg("population").alias("avg_population"),
             count_func("*").alias("data_points"),
             avg("year").alias("avg_year")  # to understand the temporal range of the data
-        ).filter(
-            (col("avg_co2").isNotNull()) &
-            (col("avg_co2_per_capita").isNotNull()) &
-            (col("data_points") >= 5)  # at least 5 years of data
-        )
+        ).filter((col("avg_co2").isNotNull()) & (col("avg_co2_per_capita").isNotNull()) & (col("data_points") >= 5))
         
         countries_count = country_stats.count()
         #print(f"countries with sufficient data: {countries_count}")
@@ -86,7 +113,6 @@ def process_clustering(batch_df, batch_id):
         print("sample country statistics:")  # lets see some data for debugging
         country_stats.orderBy(col("avg_co2").desc()).show(5)
         
-        # prepare features
         feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
         assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
         
@@ -176,12 +202,11 @@ def create_kafka_stream():
             from_json(col("json_string"), schema).alias("data")
         ).select("data.*")
         
-        # filter and clean data --- ja nao tinhamos feito isto antes?
+        # Basic validation - detailed filtering happens in process_clustering()
         filtered_df = processed_stream_df.filter(
             (col("year").isNotNull()) & 
-            (col("co2").isNotNull()) &
-            (col("country").isNotNull()) &
-            (col("iso_code").isNotNull())
+            (col("country").isNotNull())
+            # Note: iso_code and critical values filtering happens in process_clustering()
         )
         
         print("data processing pipeline created")
@@ -191,8 +216,7 @@ def create_kafka_stream():
         print(f"failed to create Kafka stream: {str(e)}")
         raise
 
-# 4. Iniciar o Stream Processing
-try:
+try:  # lets try to process the data
     print("kafka topic 'emissions-topic'")
     print("--> kafka:9092")
     print("--> database: PostgreSQL (co2_emissions)")
