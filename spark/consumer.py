@@ -172,6 +172,50 @@ def process_clustering(batch_df, batch_id):
         save_to_postgresql(results_for_db, batch_id, "co2_clusters")
         save_to_postgresql(cluster_stats, batch_id, "cluster_stats")
         
+        # --- TEMPORAL CLUSTERING (New Feature) ---
+        print("--- starting temporal clustering (by year) ---")
+        
+        # Group by country AND year
+        temporal_data = all_data.groupBy("country", "iso_code", "year").agg(
+            avg("co2").alias("co2"),
+            avg("co2_per_capita").alias("co2_per_capita"),
+            avg("gdp").alias("gdp"),
+            avg("population").alias("population")
+        ).na.drop() # Remove records with missing values
+        
+        if temporal_data.count() > 10: # Only run if we have enough data points
+            # Reuse feature columns but map to new names
+            # Note: assembler expects inputCols to match dataframe columns
+            temporal_assembler = VectorAssembler(
+                inputCols=["co2", "co2_per_capita", "gdp", "population"], 
+                outputCol="features"
+            )
+            
+            # Reuse scaler and kmeans logic
+            temporal_scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
+            
+            temporal_kmeans = KMeans(
+                k=3, # Keep k=3 for consistency
+                featuresCol="scaled_features", 
+                predictionCol="cluster",
+                seed=42
+            )
+            
+            temporal_pipeline = Pipeline(stages=[temporal_assembler, temporal_scaler, temporal_kmeans])
+            temporal_model = temporal_pipeline.fit(temporal_data)
+            temporal_results = temporal_model.transform(temporal_data)
+            
+            # Select columns for DB
+            temporal_results_db = temporal_results.select(
+                "country", "iso_code", "year", "co2", "co2_per_capita", 
+                "gdp", "population", "cluster"
+            ).withColumn("batch_id", lit(batch_id))
+            
+            print(f"saving {temporal_results_db.count()} temporal records to co2_clustering_temporal")
+            save_to_postgresql(temporal_results_db, batch_id, "co2_clustering_temporal")
+        else:
+            print("not enough temporal data for clustering")
+
         processing_time = time.time() - start_time
         print(f"batch {batch_id} completed in {processing_time:.2f}s")
         

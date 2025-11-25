@@ -213,6 +213,46 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
 
 ---
 
+### Dashboard 4: Temporal Evolution (New! 🕰️)
+
+**Dashboard Name**: CO2 Clustering Over Time (1900-2024)
+
+**Prerequisite**: Add dataset `co2_clustering_temporal`
+
+#### Chart 10: Evolution of Nations (Animated Bubble Chart)
+*Watch countries move between clusters over time!*
+- **Dataset**: `co2_clustering_temporal`
+- **Chart Type**: Scatter Plot (or Bubble Chart)
+- **Configuration**:
+  - **X-Axis**: `gdp` (Log Scale)
+  - **Y-Axis**: `co2` (Log Scale)
+  - **Dimensions/Entity**: `country`
+  - **Bubble Size**: `population`
+  - **Color/Group by**: `cluster`
+  - **Time Column**: `year` (This enables the animation slider!)
+  - **Animation**: Enable in Customize tab
+
+#### Chart 11: Cluster Sizes History (Stacked Area)
+*See how the "Rich/High Emitters" club grew over time*
+- **Dataset**: `co2_clustering_temporal`
+- **Chart Type**: Area Chart (Stacked)
+- **Configuration**:
+  - **X-Axis**: `year`
+  - **Metrics**: `count(country)`
+  - **Group by**: `cluster`
+  - **Chart Title**: "Number of Countries per Cluster (1900-2024)"
+
+#### Chart 12: World Map Time Travel
+- **Dataset**: `co2_clustering_temporal`
+- **Chart Type**: World Map
+- **Configuration**:
+  - **Country Column**: `iso_code`
+  - **Metric**: `co2`
+  - **Time Column**: `year`
+  - **Animation**: Enable
+
+---
+
 ## 🔍 Step 4: Advanced SQL Queries
 
 ### Query 1: Top Emitters per Cluster
