@@ -17,7 +17,7 @@ spec:
       containers:
       - name: producer
         image: kafka-producer:latest
-        imagePullPolicy: Never  # Usa imagem local do Minikube
+        imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BROKER
           value: "kafka.default.svc.cluster.local:9092"

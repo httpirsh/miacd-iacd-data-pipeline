@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, avg, count as count_func, countDistinct, lit, current_timestamp
+from pyspark.sql.functions import from_json, col, avg, count as count_func, countDistinct, lit, current_timestamp, min, max
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 from pyspark.sql.functions import when
 from pyspark.ml.feature import VectorAssembler, StandardScaler
