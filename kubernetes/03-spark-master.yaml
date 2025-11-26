@@ -14,7 +14,9 @@ spec:
       name: webui
   selector:
     app: spark-master
+
 ---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

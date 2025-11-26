@@ -15,7 +15,9 @@ spec:
   clusterIP: None
   selector:
     app: kafka
+
 ---
+
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
