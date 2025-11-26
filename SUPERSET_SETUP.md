@@ -211,102 +211,6 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
   - Cluster 1 total countries
   - Cluster 2 total countries
 
----
-
-### Dashboard 4: Temporal Evolution (New! 🕰️)
-
-**Dashboard Name**: CO2 Clustering Over Time (1900-2024)
-
-**Prerequisite**: Add dataset `co2_clustering_temporal`
-
-#### Chart 10: Evolution of Nations (Animated Bubble Chart)
-*Watch countries move between clusters over time!*
-- **Dataset**: `co2_clustering_temporal`
-- **Chart Type**: Scatter Plot (or Bubble Chart)
-- **Configuration**:
-  - **X-Axis**: `gdp` (Log Scale)
-  - **Y-Axis**: `co2` (Log Scale)
-  - **Dimensions/Entity**: `country`
-  - **Bubble Size**: `population`
-  - **Color/Group by**: `cluster`
-  - **Time Column**: `year` (This enables the animation slider!)
-  - **Animation**: Enable in Customize tab
-
-#### Chart 11: Cluster Sizes History (Stacked Area)
-*See how the "Rich/High Emitters" club grew over time*
-- **Dataset**: `co2_clustering_temporal`
-- **Chart Type**: Area Chart (Stacked)
-- **Configuration**:
-  - **X-Axis**: `year`
-  - **Metrics**: `count(country)`
-  - **Group by**: `cluster`
-  - **Chart Title**: "Number of Countries per Cluster (1900-2024)"
-
-#### Chart 12: World Map Time Travel
-- **Dataset**: `co2_clustering_temporal`
-- **Chart Type**: World Map
-- **Configuration**:
-  - **Country Column**: `iso_code`
-  - **Metric**: `co2`
-  - **Time Column**: `year`
-  - **Animation**: Enable
-
----
-
-## 🔍 Step 4: Advanced SQL Queries
-
-### Query 1: Top Emitters per Cluster
-```sql
-WITH ranked_countries AS (
-  SELECT 
-    cluster,
-    country,
-    avg_co2,
-    avg_co2_per_capita,
-    ROW_NUMBER() OVER (PARTITION BY cluster ORDER BY avg_co2 DESC) as rank
-  FROM co2_clusters
-)
-SELECT *
-FROM ranked_countries
-WHERE rank <= 10
-ORDER BY cluster, rank;
-```
-
-### Query 2: Cluster Comparison
-```sql
-SELECT 
-  CASE cluster
-    WHEN 0 THEN 'Cluster 0: Low Emissions'
-    WHEN 1 THEN 'Cluster 1: Medium Emissions'
-    WHEN 2 THEN 'Cluster 2: High Emissions'
-  END as cluster_name,
-  COUNT(*) as countries,
-  ROUND(AVG(avg_co2), 2) as avg_co2,
-  ROUND(AVG(avg_co2_per_capita), 2) as avg_per_capita,
-  ROUND(AVG(avg_gdp), 2) as avg_gdp,
-  ROUND(AVG(avg_population), 0) as avg_population
-FROM co2_clusters
-GROUP BY cluster
-ORDER BY cluster;
-```
-
-### Query 3: Find Similar Countries (Same Cluster)
-```sql
--- Example: Find countries similar to USA
-SELECT 
-  c1.country as reference_country,
-  c2.country as similar_country,
-  c2.cluster,
-  c2.avg_co2,
-  c2.avg_co2_per_capita,
-  c2.avg_gdp
-FROM co2_clusters c1
-JOIN co2_clusters c2 ON c1.cluster = c2.cluster
-WHERE c1.country = 'United States' 
-  AND c2.country != 'United States'
-ORDER BY ABS(c2.avg_co2 - c1.avg_co2)
-LIMIT 10;
-```
 
 ---
 
@@ -320,9 +224,7 @@ LIMIT 10;
 │  Chart 1 (50%)      │  Chart 2 (50%)            │
 ├─────────────────────┴───────────────────────────┤
 │  Chart 3 (Full Width Table)                     │
-├─────────────────────┬───────────────────────────┤
-│  Chart 4 (50%)      │  Chart 5 (50%)            │
-└─────────────────────┴───────────────────────────┘
+
 ```
 
 ### Filters to Add:

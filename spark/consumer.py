@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, avg, count as count_func, countDistinct, lit, current_timestamp
+from pyspark.sql.functions import from_json, col, avg, count as count_func, countDistinct, lit, current_timestamp, min, max
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 from pyspark.sql.functions import when
 from pyspark.ml.feature import VectorAssembler, StandardScaler
@@ -7,25 +7,10 @@ from pyspark.ml.clustering import KMeans
 from pyspark.ml import Pipeline
 import time
 
-spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
-spark.sparkContext.setLogLevel("WARN")
-
-print("spark session created successfully")
-
-schema = StructType([
-    StructField("country", StringType(), True),
-    StructField("year", IntegerType(), True),
-    StructField("iso_code", StringType(), True),
-    StructField("population", DoubleType(), True),
-    StructField("gdp", DoubleType(), True),
-    StructField("co2", DoubleType(), True),
-    StructField("co2_per_capita", DoubleType(), True)
-])
 
 def save_to_postgresql(df, batch_id, table_name):
 
     try:  # lets try to save the data to PostgreSQL
-
         jdbc_url = "jdbc:postgresql://postgres:5432/co2_emissions"
         connection_properties = {
             "user": "postgres",
@@ -42,7 +27,105 @@ def save_to_postgresql(df, batch_id, table_name):
         print(f"failed to save batch {batch_id} to postgreSQL: {str(e)}")
         return False
 
+
+def clean_data(df):
+    
+    # 1st we convert "NaN" to NULL for numeric columns --> because avg ignores NULL
+    numeric_cols = ["gdp", "population", "co2", "co2_per_capita"]
+    for col_name in numeric_cols:
+        df = df.withColumn(col_name,
+            when((col(col_name) == "NaN") | (col(col_name).isNull()), None)
+            .otherwise(col(col_name).cast("double"))
+        )
+    
+    # as seen in exploratory data, iso_code is NULL for aggregate records (World, continents, etc)
+    df = df.filter((col("iso_code").isNotNull()) & (col("iso_code") != "NaN") & (col("iso_code") != '"NaN"'))
+    
+    return df
+
+
+def aggregate_by_country(df):
+    country_stats = df.groupBy("country", "iso_code").agg(
+        # we calculate the average of the numeric columns
+        avg("co2").alias("avg_co2"),
+        avg("co2_per_capita").alias("avg_co2_per_capita"),
+        avg("gdp").alias("avg_gdp"),
+        avg("population").alias("avg_population"),
+        count_func("*").alias("data_points"),
+        
+        # we considere the temporal context
+        min("year").alias("first_year"),
+        max("year").alias("last_year"),
+        avg(when(col("year") >= 2010, col("co2"))).alias("avg_co2_recent")
+    
+    ).filter(
+        (col("avg_co2").isNotNull()) & 
+        (col("avg_co2_per_capita").isNotNull()) & 
+        (col("data_points") >= 5)
+    )
+    
+    return country_stats
+
+
+def perform_clustering(df, k=3):
+
+    cleaned_data = df.na.drop()  # bye bye NaN values
+    
+    if cleaned_data.count() < k:  # if there are less than k countries, we can't perform clustering
+        return None, None
+    
+    # prepare features for clustering
+    feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
+    assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
+    
+    kmeans = KMeans(k=k, 
+                    featuresCol="scaled_features", predictionCol="cluster", 
+                    seed=42, maxIter=20)
+    
+    # create and fit pipeline
+    pipeline = Pipeline(stages=[assembler, scaler, kmeans])
+    model = pipeline.fit(cleaned_data)
+    results = model.transform(cleaned_data)
+    
+    print(f"{k} clusters for {cleaned_data.count()} countries")
+    
+    return results, cleaned_data.count()
+
+
+def calculate_cluster_stats(results):
+    # simply statistic by cluster
+    cluster_stats = results.groupBy("cluster").agg(
+        count_func("*").alias("num_countries"),
+        avg("avg_co2").alias("avg_co2_cluster"),
+        avg("avg_co2_per_capita").alias("avg_co2_per_capita_cluster"),
+        avg("avg_gdp").alias("avg_gdp_cluster")
+    )
+    return cluster_stats
+
+
+def show_cluster_results(results, k):
+    results.groupBy("cluster").agg(
+        count_func("*").alias("countries"),
+        avg("avg_co2").alias("avg_co2")
+    ).show()
+    
+    print("top countries per cluster:")
+    for cluster_id in range(k):
+        cluster_countries = results.filter(col("cluster") == cluster_id) \
+            .select("country", "avg_co2", "avg_co2_per_capita", "avg_gdp") \
+            .orderBy(col("avg_co2").desc())
+        
+        print(f"cluster {cluster_id} (top 5 by CO2):")
+        cluster_countries.show(5, truncate=False)
+
+
 def process_clustering(batch_df, batch_id):
+
+    #  - orchestrates data cleaning, 
+    #  - aggregation, 
+    #  - clustering
+
     start_time = time.time()
     record_count = batch_df.count()
     
@@ -52,162 +135,42 @@ def process_clustering(batch_df, batch_id):
     
     print(f"processing batch {batch_id} with {record_count} records")
     
-    try:  # lets try to process the data
-        all_data = batch_df
-        initial_count = all_data.count()
-        print(f"Initial records in batch: {initial_count}")
-
+    try:
+        all_data = clean_data(batch_df)  # step 1 - clean data
+        #print(f"records to process: {all_data.count()}")
         
-        numeric_cols = ["gdp", "population", "co2", "co2_per_capita"]
-        for col_name in numeric_cols:  # convert string "NaN" to NULL --> to use avg() function
-            all_data = all_data.withColumn(
-                col_name,
-                when((col(col_name) == "NaN") | (col(col_name).isNull()), None)
-                .otherwise(col(col_name).cast("double"))
-            )
-        
-        # as we see in exploratory analysis, iso_code have data world, continents, etc
-        all_data = all_data.filter(  # lets remove them
-            (col("iso_code").isNotNull()) & 
-            (col("iso_code") != "NaN") &
-            (col("iso_code") != '"NaN"')  # Also filter the string with literal quotes
-        )
-
-        after_iso_filter = all_data.count()
-        #removed_aggregates = initial_count - after_iso_filter
-        #if removed_aggregates > 0:
-        #    print(f"removed {removed_aggregates} aggregate records (World, continents, etc.)")
-        
-        print(f"records to process: {after_iso_filter}")
-        
-        if after_iso_filter == 0:
+        if all_data.count() == 0:
             print(f"batch {batch_id}: no data after filtering aggregates")
             return
-                
-        # group by country with complete data!!!
-        country_stats = all_data.groupBy("country", "iso_code").agg(
-            avg("co2").alias("avg_co2"),
-            avg("co2_per_capita").alias("avg_co2_per_capita"),
-            avg("gdp").alias("avg_gdp"),
-            avg("population").alias("avg_population"),
-            count_func("*").alias("data_points"),
-            avg("year").alias("avg_year")  # to understand the temporal range of the data
-        ).filter((col("avg_co2").isNotNull()) & (col("avg_co2_per_capita").isNotNull()) & (col("data_points") >= 5))
         
+        country_stats = aggregate_by_country(all_data)  # step 2 - aggregate by country
         countries_count = country_stats.count()
-        #print(f"countries with sufficient data: {countries_count}")
         
-        if countries_count < 3: # we need at least 3 countries to perform clustering    
+        if countries_count < 3:
             print(f"batch {batch_id}: not enough countries for clustering (need 3, got {countries_count})")
-            
-            # save data for debugging
-            debug_data = country_stats.withColumn("batch_id", lit(batch_id))
-            save_to_postgresql(debug_data, batch_id, "debug_country_stats")
             return
         
-        print("sample country statistics:")  # lets see some data for debugging
-        country_stats.orderBy(col("avg_co2").desc()).show(5)
+        results, num_countries = perform_clustering(country_stats, k=3)  # step 3 - perform clustering
         
-        feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
-        assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
-        
-        cleaned_data = country_stats.na.drop()  # bye bye nan values
-        
-        if cleaned_data.count() < 3:
-            print(f"batch {batch_id}: not enough data after cleaning")
+        if results is None:
+            print(f"batch {batch_id}: clustering failed")
             return
         
-        # scale features
-        scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
+        cluster_stats = calculate_cluster_stats(results)  # step 4 - calculate cluster statistics
         
-        k = 3 
-        print(f"{k} clusters for {cleaned_data.count()} countries")
+        show_cluster_results(results, k=3)  # step 5 - show results (debugging)
         
-        kmeans = KMeans(
-            k=k, 
-            featuresCol="scaled_features", 
-            predictionCol="cluster",
-            seed=42,
-            maxIter=20
-        )
-        
-        pipeline = Pipeline(stages=[assembler, scaler, kmeans])
-        model = pipeline.fit(cleaned_data)  # train the model
-        results = model.transform(cleaned_data)
-        
-        # prepare data for PostgreSQL
         results_for_db = results.select(
             "country", "iso_code", "avg_co2", "avg_co2_per_capita", 
-            "avg_gdp", "avg_population", "cluster"
+            "avg_gdp", "avg_population", "data_points",
+            "first_year", "last_year", "avg_co2_recent", "cluster"
         ).withColumn("batch_id", lit(batch_id))
         
-        # statistics of the clusters
-        cluster_stats = results.groupBy("cluster").agg(
-            count_func("*").alias("num_countries"),
-            avg("avg_co2").alias("avg_co2_cluster"),
-            avg("avg_co2_per_capita").alias("avg_co2_per_capita_cluster"),
-            avg("avg_gdp").alias("avg_gdp_cluster")
-        ).withColumn("batch_id", lit(batch_id))
-        
-        print("cluster statistics:")
-        cluster_stats.show()
-        
-        print("top countries per cluster:")
-        for cluster_id in range(k):
-            cluster_countries = results.filter(col("cluster") == cluster_id) \
-                .select("country", "avg_co2", "avg_co2_per_capita", "avg_gdp") \
-                .orderBy(col("avg_co2").desc())
-            
-            print(f"cluster {cluster_id} (top 5 by CO2):")
-            cluster_countries.show(5, truncate=False)
+        cluster_stats_db = cluster_stats.withColumn("batch_id", lit(batch_id))
         
         print("saving to postgreSQL!!")
         save_to_postgresql(results_for_db, batch_id, "co2_clusters")
-        save_to_postgresql(cluster_stats, batch_id, "cluster_stats")
-        
-        # --- TEMPORAL CLUSTERING (New Feature) ---
-        print("--- starting temporal clustering (by year) ---")
-        
-        # Group by country AND year
-        temporal_data = all_data.groupBy("country", "iso_code", "year").agg(
-            avg("co2").alias("co2"),
-            avg("co2_per_capita").alias("co2_per_capita"),
-            avg("gdp").alias("gdp"),
-            avg("population").alias("population")
-        ).na.drop() # Remove records with missing values
-        
-        if temporal_data.count() > 10: # Only run if we have enough data points
-            # Reuse feature columns but map to new names
-            # Note: assembler expects inputCols to match dataframe columns
-            temporal_assembler = VectorAssembler(
-                inputCols=["co2", "co2_per_capita", "gdp", "population"], 
-                outputCol="features"
-            )
-            
-            # Reuse scaler and kmeans logic
-            temporal_scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
-            
-            temporal_kmeans = KMeans(
-                k=3, # Keep k=3 for consistency
-                featuresCol="scaled_features", 
-                predictionCol="cluster",
-                seed=42
-            )
-            
-            temporal_pipeline = Pipeline(stages=[temporal_assembler, temporal_scaler, temporal_kmeans])
-            temporal_model = temporal_pipeline.fit(temporal_data)
-            temporal_results = temporal_model.transform(temporal_data)
-                
-            # Select columns for DB
-            temporal_results_db = temporal_results.select(
-                "country", "iso_code", "year", "co2", "co2_per_capita", 
-                "gdp", "population", "cluster"
-            ).withColumn("batch_id", lit(batch_id))
-            
-            print(f"saving {temporal_results_db.count()} temporal records to co2_clustering_temporal")
-            save_to_postgresql(temporal_results_db, batch_id, "co2_clustering_temporal")
-        else:
-            print("not enough temporal data for clustering")
+        save_to_postgresql(cluster_stats_db, batch_id, "cluster_stats")
 
         processing_time = time.time() - start_time
         print(f"batch {batch_id} completed in {processing_time:.2f}s")
@@ -227,8 +190,6 @@ def create_kafka_stream():
             .option("kafka.bootstrap.servers", "kafka:9092") \
             .option("subscribe", "emissions-topic") \
             .option("startingOffsets", "earliest") \
-            .option("kafka.client.id", "spark-consumer") \
-            .option("kafka.group.id", "spark-clustering-group") \
             .load()
         
         print("connected to Kafka at kafka:9092")
@@ -239,11 +200,10 @@ def create_kafka_stream():
             from_json(col("json_string"), schema).alias("data")
         ).select("data.*")
         
-        # Basic validation - detailed filtering happens in process_clustering()
+        # basic validation - detailed filtering happens in process_clustering()
         filtered_df = processed_stream_df.filter(
             (col("year").isNotNull()) & 
             (col("country").isNotNull())
-            # Note: iso_code and critical values filtering happens in process_clustering()
         )
         
         print("data processing pipeline created")
@@ -252,6 +212,22 @@ def create_kafka_stream():
     except Exception as e:
         print(f"failed to create Kafka stream: {str(e)}")
         raise
+
+
+spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
+spark.sparkContext.setLogLevel("WARN")
+
+print("spark session created successfully")
+
+schema = StructType([
+    StructField("country", StringType(), True),
+    StructField("year", IntegerType(), True),
+    StructField("iso_code", StringType(), True),
+    StructField("population", DoubleType(), True),
+    StructField("gdp", DoubleType(), True),
+    StructField("co2", DoubleType(), True),
+    StructField("co2_per_capita", DoubleType(), True)
+])
 
 try:  # lets try to process the data
     print("kafka topic 'emissions-topic'")
@@ -265,7 +241,6 @@ try:  # lets try to process the data
     query = kafka_stream.writeStream \
         .outputMode("update") \
         .foreachBatch(process_clustering) \
-        .option("checkpointLocation", "/tmp/checkpoints") \
         .trigger(processingTime="15 seconds") \
         .start()
     

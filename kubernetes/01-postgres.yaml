@@ -29,6 +29,10 @@ data:
         avg_co2_per_capita DECIMAL(15,4),
         avg_gdp DECIMAL(20,4),
         avg_population DECIMAL(20,4),
+        data_points INTEGER,
+        first_year INTEGER,
+        last_year INTEGER,
+        avg_co2_recent DECIMAL(15,4),
         cluster INTEGER,
         processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -45,27 +49,10 @@ data:
         processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     
-    -- Table for temporal clustering (by year)
-    CREATE TABLE IF NOT EXISTS co2_clustering_temporal (
-        id SERIAL PRIMARY KEY,
-        batch_id INTEGER,
-        country VARCHAR(100),
-        iso_code VARCHAR(10),
-        year INTEGER,
-        co2 DECIMAL(15,4),
-        co2_per_capita DECIMAL(15,4),
-        gdp DECIMAL(20,4),
-        population DECIMAL(20,4),
-        cluster INTEGER,
-        processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    
     -- Indexes for better query performance
     CREATE INDEX IF NOT EXISTS idx_co2_clusters_country ON co2_clusters(country);
     CREATE INDEX IF NOT EXISTS idx_co2_clusters_cluster ON co2_clusters(cluster);
     CREATE INDEX IF NOT EXISTS idx_co2_clusters_batch ON co2_clusters(batch_id);
-    CREATE INDEX IF NOT EXISTS idx_temporal_year ON co2_clustering_temporal(year);
-    CREATE INDEX IF NOT EXISTS idx_temporal_country ON co2_clustering_temporal(country);
     
     -- View for cluster analysis
     CREATE OR REPLACE VIEW cluster_analysis AS
