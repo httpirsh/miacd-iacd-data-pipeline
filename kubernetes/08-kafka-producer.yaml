@@ -21,10 +21,3 @@ spec:
         env:
         - name: KAFKA_BROKER
           value: "kafka.default.svc.cluster.local:9092"
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "200m"

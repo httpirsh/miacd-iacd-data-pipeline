@@ -77,14 +77,6 @@ spec:
         volumeMounts:
         - name: kafka-data
           mountPath: /tmp/kafka-data
-        
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
   
   volumeClaimTemplates:
   - metadata:
