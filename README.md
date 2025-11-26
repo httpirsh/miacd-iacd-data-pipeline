@@ -31,7 +31,7 @@ A complete data engineering pipeline for analyzing global CO2 emissions with **K
 ### Components
 1. **Apache Kafka (KRaft mode)** - Message broker for streaming (no Zookeeper)
 2. **Apache Spark (Master + Worker)** - ML clustering with K-means (k=3)
-3. **PostgreSQL** - Storage for raw data and clustering results
+3. **PostgreSQL** - Storage for clustering results
 4. **Apache Superset** - Data visualization dashboards
 
 ### Data Flow
@@ -50,6 +50,7 @@ CSV (23K rows) → Kafka Producer → Kafka Topic (emissions-topic)
 - Real-time ML clustering in Spark
 - Persistent storage with PostgreSQL
 - Interactive dashboards with Superset
+- Temporal context in clustering (first_year, last_year, avg_co2_recent)
 
 ## Database Schema
 
@@ -57,28 +58,52 @@ CSV (23K rows) → Kafka Producer → Kafka Topic (emissions-topic)
 **Credentials**: `postgres` / `postgres`
 
 ### Tables
-1. **co2_clusters** (ML results)
-   - batch_id, country, year_min, year_max, records
-   - avg_population, avg_gdp, avg_co2, avg_co2_per_capita
-   - cluster (0, 1, or 2 from K-means)
-   
-2. **cluster_stats** (aggregated by cluster)
-   - cluster, country_count, total_records
-   - avg_population, avg_gdp, avg_co2, avg_co2_per_capita
+
+#### 1. `co2_clusters` (Main clustering results)
+| Column | Type | Description |
+|--------|------|-------------|
+| `country` | text | Country name |
+| `iso_code` | text | ISO 3-letter code |
+| `avg_co2` | double precision | Average CO2 emissions (all years) |
+| `avg_co2_per_capita` | double precision | Average per capita emissions |
+| `avg_gdp` | double precision | Average GDP |
+| `avg_population` | double precision | Average population |
+| `data_points` | integer | Number of years with data |
+| `first_year` | integer | Earliest year in dataset |
+| `last_year` | integer | Latest year in dataset |
+| `avg_co2_recent` | numeric(15,4) | Average CO2 since 2010 |
+| `cluster` | integer | K-means cluster (0, 1, 2) |
+| `batch_id` | integer | Processing batch ID |
+| `processing_time` | timestamp | When record was saved |
+
+#### 2. `cluster_stats` (Aggregated statistics per cluster)
+| Column | Type | Description |
+|--------|------|-------------|
+| `cluster` | integer | Cluster number (0, 1, 2) |
+| `num_countries` | integer | Number of countries in cluster |
+| `avg_co2_cluster` | double precision | Average CO2 for cluster |
+| `avg_co2_per_capita_cluster` | double precision | Average per capita for cluster |
+| `avg_gdp_cluster` | double precision | Average GDP for cluster |
+| `batch_id` | integer | Processing batch ID |
+| `processing_time` | timestamp | When record was saved |
 
 ### Views
 - **cluster_analysis** - Comprehensive cluster statistics
+- **top_emitters_by_cluster** - Top 10 emitters per cluster
 
 ## Project Structure
 
 ```
-project/
+miacd-iacd-data-pipeline/
 ├── README.md                    # Complete setup guide
 ├── SUPERSET_SETUP.md            # Superset configuration guide
+├── LOGICA_CONSUMER.md           # Detailed consumer logic explanation
+├── MELHORIAS_TEMPORAL.md        # Temporal context improvements
+├── REFATORACAO_CONSUMER.md      # Consumer refactoring documentation
 ├── requirements.txt             # Python dependencies (for local dev/Jupyter)
 ├── data/
 │   ├── owid-co2-data.csv        # Original dataset (14MB, 79 columns)
-│   └── reduced_co2.csv          # Processed: 7 columns, ~19K rows (1950-2024)
+│   └── reduced_co2.csv          # Processed: 7 columns, 23K rows (1900-2024)
 ├── scripts/
 │   ├── eda.ipynb                # Exploratory data analysis
 │   └── extract_reduced.py       # Dataset extraction script
@@ -87,21 +112,19 @@ project/
 │   └── producer.py              # Streams CSV → Kafka topic
 ├── spark/
 │   ├── Dockerfile               # Spark consumer container image  
-│   └── consumer.py              # Kafka → NaN cleaning → K-means → PostgreSQL
+│   └── consumer.py              # Kafka → Clean → Aggregate → K-means → PostgreSQL
 ├── superset/
-│   └── Dockerfile               # ⚠️ CUSTOM Superset image with PostgreSQL driver
+│   └── Dockerfile               # Custom Superset image with PostgreSQL driver
 ├── postgres/
-│   └── init.sql                 # Database schema (co2_clusters, cluster_stats)
-└── kubernetes/                  # K8s deployment manifests (01-09)
-    ├── 01-postgres-pvc.yaml     # Persistent storage for PostgreSQL
-    ├── 02-postgres-deploy.yaml  # PostgreSQL deployment
-    ├── 03-postgres-service.yaml # PostgreSQL service
-    ├── 04-kafka-kraft.yaml      # Kafka (KRaft mode, no Zookeeper)
-    ├── 05-spark-master.yaml     # Spark master deployment
-    ├── 06-spark-worker.yaml     # Spark worker deployment
-    ├── 07-superset.yaml         # Superset with custom image (superset-postgres:v2)
-    ├── 08-kafka-producer.yaml   # Containerized Kafka producer
-    └── 09-spark-consumer.yaml   # Containerized Spark consumer
+│   └── init.sql                 # Database schema (tables, views, indexes)
+└── kubernetes/                  # K8s deployment manifests (01-07)
+    ├── 01-postgres.yaml         # PostgreSQL (PVC, ConfigMap, Deployment, Service)
+    ├── 02-kafka.yaml            # Kafka KRaft (Service Headless, StatefulSet)
+    ├── 03-spark-master.yaml     # Spark master (Service, Deployment)
+    ├── 04-spark-worker.yaml     # Spark worker (Deployment)
+    ├── 05-kafka-producer.yaml   # Kafka producer (Deployment)
+    ├── 06-spark-consumer.yaml   # Spark consumer (Deployment)
+    └── 07-superset.yaml         # Superset (Service, PVC, Deployment)
 ```
 
 ## Usage
@@ -109,8 +132,8 @@ project/
 ### Prerequisites
 - Minikube installed
 - kubectl configured
-- Python 3.8+ with pip
-- Git
+- Docker
+- Python 3.8+ with pip (for local development)
 
 ### Deployment Steps
 
@@ -119,45 +142,58 @@ project/
    minikube start --cpus=4 --memory=8192
    ```
 
-2. **Build Docker Images**
+2. **Configure Docker Environment for Minikube**
    ```bash
    eval $(minikube docker-env)
-   
+   ```
+
+3. **Build Docker Images**
+   ```bash
    # Build Kafka producer
-   docker build -t kafka-producer:latest -f kafka/Dockerfile .
+   docker build -t kafka-producer:latest ./kafka
    
    # Build Spark consumer
-   docker build -t spark-consumer:latest -f spark/Dockerfile .
+   docker build -t spark-consumer:latest ./spark
    
    # Build Superset with PostgreSQL driver (REQUIRED!)
    docker build -t superset-postgres:v2 ./superset
    ```
    
-   **Important**: The Superset image MUST be built locally because the official `apache/superset:latest` does NOT include database drivers. Our custom image installs the PostgreSQL driver (`psycopg2-binary`) in the correct virtual environment.
+   **Important**: The Superset image MUST be built locally because the official `apache/superset:latest` does NOT include database drivers. Our custom image installs the PostgreSQL driver (`psycopg2-binary`).
 
-3. **Deploy to Kubernetes**
+4. **Deploy to Kubernetes**
    ```bash
    kubectl apply -f kubernetes/
    ```
 
-4. **Verify Deployment**
+5. **Verify Deployment**
    Wait for all pods to be in `Running` state:
    ```bash
-   kubectl get pods -w
+   kubectl get pods
+   
+   # Expected pods:
+   # - kafka-0
+   # - kafka-producer-xxx
+   # - postgres-xxx
+   # - spark-consumer-xxx
+   # - spark-master-xxx
+   # - spark-worker-xxx
+   # - superset-xxx
    ```
 
 ### Verification
+
 Check logs to ensure data is flowing:
 ```bash
 # Kafka Producer
-kubectl logs -l app=kafka-producer --tail=20
+kubectl logs deployment/kafka-producer --tail=20
 
 # Spark Consumer
-kubectl logs -l app=spark-consumer --tail=50
+kubectl logs deployment/spark-consumer --tail=50
 
 # PostgreSQL Data
-kubectl exec -it $(kubectl get pods -l app=postgres -o name | head -1) -- \
-  psql -U postgres -d co2_emissions -c "SELECT COUNT(*) FROM co2_clusters;"
+kubectl exec deployment/postgres -- psql -U postgres -d co2_emissions -c \
+  "SELECT COUNT(*) FROM co2_clusters;"
 ```
 
 ### Accessing Services
@@ -168,7 +204,7 @@ kubectl exec -it $(kubectl get pods -l app=postgres -o name | head -1) -- \
 
 1. **Start Port-Forward**:
    ```bash
-   kubectl port-forward svc/superset 8088:8088
+   kubectl port-forward service/superset 8088:8088
    ```
    Leave this terminal open.
 
@@ -196,14 +232,61 @@ kubectl exec -it $(kubectl get pods -l app=postgres -o name | head -1) -- \
    See detailed instructions in [`SUPERSET_SETUP.md`](SUPERSET_SETUP.md)
 
 **Troubleshooting**:
-- If connection fails: verify both port-forwards are running (Superset 8088, PostgreSQL 5432)
+- If connection fails: verify port-forward is running (`kubectl port-forward service/superset 8088:8088`)
 - If "Could not load database driver" error: rebuild Superset image with `docker build -t superset-postgres:v2 ./superset`
 
 #### Spark Master UI
 ```bash
-kubectl port-forward svc/spark-master 8080:8080
+kubectl port-forward service/spark-master 8080:8080
 # Access at http://localhost:8080
 ```
+
+## Spark Consumer Processing
+
+The consumer applies the following transformations:
+
+1. **Data Cleaning** (`clean_data`):
+   - Convert string "NaN" to NULL for numeric columns
+   - Filter aggregate records (World, continents, etc.)
+
+2. **Country Aggregation** (`aggregate_by_country`):
+   - Group by country and ISO code
+   - Calculate averages: CO2, CO2 per capita, GDP, population
+   - Add temporal context:
+     - `data_points`: Number of years
+     - `first_year`: Earliest year
+     - `last_year`: Latest year
+     - `avg_co2_recent`: Average CO2 since 2010
+
+3. **Clustering** (`perform_clustering`):
+   - Features: avg_co2, avg_co2_per_capita, avg_gdp, avg_population
+   - StandardScaler normalization
+   - K-means (k=3, seed=42, maxIter=20)
+
+4. **Cluster Statistics** (`calculate_cluster_stats`):
+   - Aggregate metrics per cluster
+   - Countries per cluster, average values
+
+5. **Save to PostgreSQL**:
+   - `co2_clusters` table
+   - `cluster_stats` table
+
+See [`LOGICA_CONSUMER.md`](LOGICA_CONSUMER.md) for detailed explanation.
+
+## ML Clustering Details
+
+### K-means Configuration
+- **Number of clusters (k)**: 3
+- **Features used**: avg_co2, avg_co2_per_capita, avg_gdp, avg_population
+- **Pre-processing**: StandardScaler (feature normalization)
+- **Algorithm**: K-means clustering in PySpark MLlib
+- **Seed**: 42 (for reproducibility)
+- **Max iterations**: 20
+
+### Expected Cluster Patterns
+- **Cluster 0**: Developing countries (low CO2, low GDP)
+- **Cluster 1**: Moderate emitters (medium CO2, medium GDP)
+- **Cluster 2**: Industrialized countries (high CO2, high GDP, high per capita)
 
 ## Useful Commands
 
@@ -212,60 +295,136 @@ kubectl port-forward svc/spark-master 8080:8080
 # List topics
 kubectl exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092
 
-# Monitor messages
-kubectl exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic emissions-topic --from-beginning --max-messages 10
+# Monitor messages (first 10)
+kubectl exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic emissions-topic \
+  --from-beginning --max-messages 10
 ```
 
 ### PostgreSQL
 ```bash
-# Connect to database
-PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions
+# Access database
+kubectl exec -it deployment/postgres -- psql -U postgres -d co2_emissions
+
+# Useful queries:
+SELECT COUNT(*) FROM co2_clusters;
+SELECT cluster, COUNT(*) as countries FROM co2_clusters GROUP BY cluster;
+SELECT * FROM cluster_analysis;
 ```
 
-## ML Clustering Details
+### Restart Components
+```bash
+kubectl rollout restart deployment/kafka-producer
+kubectl rollout restart deployment/spark-consumer
+kubectl rollout restart deployment/superset
+```
 
-### K-means Configuration
-- **Number of clusters (k)**: 3
-- **Features used**: avg_population, avg_gdp, avg_co2, avg_co2_per_capita
-- **Algorithm**: K-means clustering in PySpark MLlib
-- **Output**: Countries grouped by emission patterns
+### Stop and Resume
+```bash
+# Stop (keeps data)
+minikube stop
 
-### Expected Cluster Patterns
-- **Cluster 0**: High population, moderate emissions
-- **Cluster 1**: Low population, low emissions  
-- **Cluster 2**: High GDP, high per capita emissions
+# Resume
+minikube start
+kubectl port-forward service/superset 8088:8088  # If needed
+
+# Clean everything
+kubectl delete -f kubernetes/
+minikube delete
+```
 
 ## Troubleshooting
 
-- **Kafka not receiving messages**: Check topic existence and producer logs. Ensure CSV path is correct.
-- **Spark consumer not processing**: Verify PostgreSQL is running and Spark packages are downloaded.
-- **PostgreSQL connection**: Use `postgres` host within K8s, `localhost` with port-forward.
-- **PVC issues**: If stuck terminating, remove finalizers. Check Minikube disk space.
-- **OOM Errors**: Increase Minikube memory or adjust Spark worker config.
+### Pods in ImagePullBackOff
+```bash
+# Verify images were built:
+eval $(minikube docker-env)
+docker images | grep -E "kafka-producer|spark-consumer|superset"
+
+# Rebuild if necessary
+docker build -t kafka-producer:latest ./kafka
+docker build -t spark-consumer:latest ./spark
+docker build -t superset-postgres:v2 ./superset
+```
+
+### Superset Not Starting
+```bash
+# Check logs
+kubectl logs deployment/superset
+
+# Restart
+kubectl rollout restart deployment/superset
+```
+
+### Consumer Not Processing Data
+```bash
+# Verify Kafka is running
+kubectl get pods | grep kafka
+
+# Check consumer logs
+kubectl logs deployment/spark-consumer --tail=50
+
+# Verify PostgreSQL
+kubectl exec deployment/postgres -- psql -U postgres -d co2_emissions -c \
+  "SELECT COUNT(*) FROM co2_clusters;"
+```
+
+### Adding Missing Columns to PostgreSQL
+If upgrading from older version:
+```bash
+kubectl exec deployment/postgres -- psql -U postgres -d co2_emissions -c \
+  "ALTER TABLE co2_clusters ADD COLUMN IF NOT EXISTS data_points INTEGER;
+   ALTER TABLE co2_clusters ADD COLUMN IF NOT EXISTS first_year INTEGER;
+   ALTER TABLE co2_clusters ADD COLUMN IF NOT EXISTS last_year INTEGER;
+   ALTER TABLE co2_clusters ADD COLUMN IF NOT EXISTS avg_co2_recent DECIMAL(15,4);"
+```
+
+## Documentation
+
+Additional documentation files:
+- **[LOGICA_CONSUMER.md](LOGICA_CONSUMER.md)** - Detailed Spark consumer logic
+- **[MELHORIAS_TEMPORAL.md](MELHORIAS_TEMPORAL.md)** - Temporal context improvements
+- **[REFATORACAO_CONSUMER.md](REFATORACAO_CONSUMER.md)** - Consumer refactoring
+- **[AUDITORIA_KUBERNETES.md](AUDITORIA_KUBERNETES.md)** - Kubernetes manifests audit
+- **[SUPERSET_SETUP.md](SUPERSET_SETUP.md)** - Superset configuration guide
+
+## Technology Stack
+
+- **Kubernetes** - Container orchestration
+- **Apache Kafka 4.1.0** - Streaming platform (KRaft mode)
+- **Apache Spark 4.0.1** - Distributed processing + MLlib
+- **PostgreSQL 15** - Relational database
+- **Apache Superset** - Business intelligence and visualization
+- **Python 3.11** - Programming language
+- **Docker** - Containerization
 
 ## Project Status
 
 ### Completed
-- Dataset reduced from 79 → 7 columns (1900-2024, 23,405 rows)
-- KRaft Kafka deployment (no Zookeeper)
-- Kafka producer streaming CSV data
-- Spark K-means clustering consumer (k=3)
-- PostgreSQL schema with clustering tables
-- All 6 Kubernetes pods deployed and running
-- Port-forwards active (Kafka 9092, PostgreSQL 5432, Superset 8088)
+- ✅ Dataset reduced from 79 → 7 columns (1900-2024, 23,405 rows)
+- ✅ KRaft Kafka deployment (no Zookeeper)
+- ✅ Kafka producer streaming CSV data
+- ✅ Spark K-means clustering consumer (k=3) with temporal context
+- ✅ PostgreSQL schema with clustering tables
+- ✅ Consolidated Kubernetes manifests (7 files)
+- ✅ Modular consumer code (6 focused functions)
+- ✅ All pods deployed and running
+- ✅ Superset dashboards operational
 
 ### Architecture Highlights
 - **Simplified**: KRaft mode eliminates Zookeeper complexity
 - **ML Integration**: Real-time K-means clustering in Spark
+- **Temporal Context**: first_year, last_year, avg_co2_recent for trend analysis
 - **Scalable**: Kubernetes orchestration with persistent storage
-- **Modern**: kafka-python-ng for Python 3.12+ compatibility
+- **Modular**: Clean, testable consumer code
+- **Modern**: Latest versions of Kafka, Spark, PostgreSQL
 
 ## Contributors
 
-**IACD** - Data Engineering Pipeline Project  
+**Course**: IACD (Infraestruturas e Arquiteturas para Ciência de Dados)  
+**Project**: Data Engineering Pipeline with Machine Learning  
 **Technology Stack**: Kafka + Spark + PostgreSQL + Superset on Kubernetes  
-**Repository**: [miacd-iacd-data-pipeline](https://github.com/httpirsh/miacd-iacd-data-pipeline)
 
 ---
 
-**Last Updated**: November 25, 2025
+**Last Updated**: November 26, 2025
