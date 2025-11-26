@@ -10,7 +10,9 @@ spec:
       targetPort: 8088
   selector:
     app: superset
+
 ---
+
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -21,7 +23,9 @@ spec:
   resources:
     requests:
       storage: 2Gi
+      
 ---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
