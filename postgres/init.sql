@@ -1,7 +1,7 @@
--- database: co2_data (matching your original setup)
--- user: postgres / postgres
+-- Database: co2_emissions (matching Kubernetes setup)
+-- User: postgres / postgres
 
--- table to store the clustering results
+-- Table to store clustering results
 CREATE TABLE IF NOT EXISTS co2_clusters (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER,
@@ -11,11 +11,15 @@ CREATE TABLE IF NOT EXISTS co2_clusters (
     avg_co2_per_capita DECIMAL(15,4),
     avg_gdp DECIMAL(20,4),
     avg_population DECIMAL(20,4),
+    data_points INTEGER,
+    first_year INTEGER,
+    last_year INTEGER,
+    avg_co2_recent DECIMAL(15,4),
     cluster INTEGER,
     processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- table to store cluster statistics
+-- Table to store cluster statistics
 CREATE TABLE IF NOT EXISTS cluster_stats (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER,
@@ -27,19 +31,36 @@ CREATE TABLE IF NOT EXISTS cluster_stats (
     processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- indexes for better performance
+-- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_co2_clusters_country ON co2_clusters(country);
 CREATE INDEX IF NOT EXISTS idx_co2_clusters_cluster ON co2_clusters(cluster);
 CREATE INDEX IF NOT EXISTS idx_co2_clusters_batch ON co2_clusters(batch_id);
 
--- view for cluster analysis
+-- View for cluster analysis
 CREATE OR REPLACE VIEW cluster_analysis AS
 SELECT 
     cluster,
     COUNT(*) as country_count,
     ROUND(AVG(avg_co2), 2) as avg_co2,
     ROUND(AVG(avg_co2_per_capita), 2) as avg_co2_per_capita,
-    ROUND(AVG(avg_gdp), 2) as avg_gdp
+    ROUND(AVG(avg_gdp), 2) as avg_gdp,
+    ROUND(AVG(avg_population), 2) as avg_population
 FROM co2_clusters
 GROUP BY cluster
 ORDER BY cluster;
+
+-- View for top emitters per cluster
+CREATE OR REPLACE VIEW top_emitters_by_cluster AS
+SELECT 
+    cluster,
+    country,
+    ROUND(avg_co2, 2) as avg_co2,
+    ROUND(avg_co2_per_capita, 2) as co2_per_capita,
+    ROUND(avg_gdp, 2) as gdp
+FROM (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY cluster ORDER BY avg_co2 DESC) as rn
+    FROM co2_clusters
+) ranked
+WHERE rn <= 10
+ORDER BY cluster, avg_co2 DESC;
