@@ -10,8 +10,9 @@ spec:
       targetPort: 8088
   selector:
     app: superset
-  type: LoadBalancer
+
 ---
+
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -22,7 +23,9 @@ spec:
   resources:
     requests:
       storage: 2Gi
+      
 ---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -63,13 +66,6 @@ spec:
               --password admin &&
             superset init &&
             gunicorn -b 0.0.0.0:8088 --timeout 120 'superset.app:create_app()'
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
       volumes:
       - name: superset-storage
         persistentVolumeClaim:

@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, avg, count as count_func, countDistinct, lit, current_timestamp
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
+from pyspark.sql.functions import when
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml import Pipeline
@@ -56,40 +57,34 @@ def process_clustering(batch_df, batch_id):
         initial_count = all_data.count()
         print(f"Initial records in batch: {initial_count}")
 
-        # Convert string "NaN" to NULL for numeric columns
-        # Pandas sends NaN as string "NaN" in JSON, but Spark needs NULL for avg()
-        from pyspark.sql.functions import when
         
         numeric_cols = ["gdp", "population", "co2", "co2_per_capita"]
-        for col_name in numeric_cols:
+        for col_name in numeric_cols:  # convert string "NaN" to NULL --> to use avg() function
             all_data = all_data.withColumn(
                 col_name,
                 when((col(col_name) == "NaN") | (col(col_name).isNull()), None)
                 .otherwise(col(col_name).cast("double"))
             )
         
-        # Filter ONLY aggregates (iso_code = NULL, "NaN", or '"NaN"' with quotes)
-        # iso_code NULL or "NaN" means aggregates like "World", "Europe", etc.
-        all_data = all_data.filter(
+        # as we see in exploratory analysis, iso_code have data world, continents, etc
+        all_data = all_data.filter(  # lets remove them
             (col("iso_code").isNotNull()) & 
             (col("iso_code") != "NaN") &
             (col("iso_code") != '"NaN"')  # Also filter the string with literal quotes
         )
+
         after_iso_filter = all_data.count()
-        removed_aggregates = initial_count - after_iso_filter
-        if removed_aggregates > 0:
-            print(f"Removed {removed_aggregates} aggregate records (World, continents, etc.)")
+        #removed_aggregates = initial_count - after_iso_filter
+        #if removed_aggregates > 0:
+        #    print(f"removed {removed_aggregates} aggregate records (World, continents, etc.)")
         
-        print(f"Records to process: {after_iso_filter}")
+        print(f"records to process: {after_iso_filter}")
         
         if after_iso_filter == 0:
-            print(f"Batch {batch_id}: No data after filtering aggregates")
+            print(f"batch {batch_id}: no data after filtering aggregates")
             return
-        
-        # Note: NaN values will be handled by aggregation (avg ignores NaN)
-        # and then filtered out at line ~121 with country_stats.na.drop()
-        
-        # Group by country with complete data
+                
+        # group by country with complete data!!!
         country_stats = all_data.groupBy("country", "iso_code").agg(
             avg("co2").alias("avg_co2"),
             avg("co2_per_capita").alias("avg_co2_per_capita"),
@@ -116,7 +111,7 @@ def process_clustering(batch_df, batch_id):
         feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
         assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
         
-        cleaned_data = country_stats.na.drop()  # bye bye null values
+        cleaned_data = country_stats.na.drop()  # bye bye nan values
         
         if cleaned_data.count() < 3:
             print(f"batch {batch_id}: not enough data after cleaning")
@@ -125,8 +120,6 @@ def process_clustering(batch_df, batch_id):
         # scale features
         scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
         
-        # K-means with dynamic k (2-4 clusters)
-        #k = min(4, max(2, cleaned_data.count() // 3)) 
         k = 3 
         print(f"{k} clusters for {cleaned_data.count()} countries")
         
