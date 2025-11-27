@@ -213,11 +213,17 @@ def create_kafka_stream():
         print(f"failed to create Kafka stream: {str(e)}")
         raise
 
+#spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
 
-spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
+# but we want to run it in cluster mode - distributed process for spark master and workers:
+spark = SparkSession.builder \
+    .appName("CO2EmissionsClustering") \
+    .master("spark://spark-master:7077") \
+    .getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
-print("spark session created successfully")
+#print("spark session created successfully")
+print("spark session created successfully (cluster mode: spark://spark-master:7077)")
 
 schema = StructType([
     StructField("country", StringType(), True),
