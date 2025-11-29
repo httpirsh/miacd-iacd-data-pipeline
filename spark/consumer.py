@@ -213,17 +213,27 @@ def create_kafka_stream():
         print(f"failed to create Kafka stream: {str(e)}")
         raise
 
-#spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
+# LOCAL MODE - sufficient for this dataset size (23K records)
+spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
 
-# but we want to run it in cluster mode - distributed process for spark master and workers:
-spark = SparkSession.builder \
-    .appName("CO2EmissionsClustering") \
-    .master("spark://spark-master:7077") \
-    .getOrCreate()
+# CLUSTER MODE - distributed processing (currently not used due to networking complexity in Kubernetes)
+# Get pod IP from environment (set by Kubernetes downward API)
+# pod_ip = os.getenv('POD_IP', '0.0.0.0')
+# spark = SparkSession.builder \
+#     .appName("CO2EmissionsClustering") \
+#     .master("spark://spark-master:7077") \
+#     .config("spark.executor.memory", "512m") \
+#     .config("spark.executor.cores", "1") \
+#     .config("spark.cores.max", "1") \
+#     .config("spark.driver.host", pod_ip) \
+#     .config("spark.driver.bindAddress", "0.0.0.0") \
+#     .config("spark.driver.port", "0") \
+#     .config("spark.network.timeout", "800s") \
+#     .getOrCreate()
+
 spark.sparkContext.setLogLevel("WARN")
 
-#print("spark session created successfully")
-print("spark session created successfully (cluster mode: spark://spark-master:7077)")
+print("spark session created successfully (local mode)")
 
 schema = StructType([
     StructField("country", StringType(), True),
