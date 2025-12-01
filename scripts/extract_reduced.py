@@ -12,7 +12,7 @@
 import pandas as pd
 import os
 
-def preprocess_co2_data(input_path: str, output_path: str):
+def preprocess_co2_data(input_path, output_path):
 
     print(f"loading data from '{input_path}'")
     try:
@@ -21,14 +21,19 @@ def preprocess_co2_data(input_path: str, output_path: str):
         print(f"input file '{input_path}' was not found")
         return
 
+    print(f"  - Original shape: {df.shape[0]:,} rows, {df.shape[1]} columns")
+
     # as decided during the exploratory analysis, we dont need all the original columns.
     columns_to_keep = ["country", "year", "iso_code", "population", "gdp", "co2", "co2_per_capita"]
         
     df_filtered = df[columns_to_keep]
 
-    # well filter the records by date
+    # filter the records by date (1900-2022)
     df_final = df_filtered[df_filtered['year'] >= 1900].copy()
-    df_final = df_final[df_filtered['year'] <= 2022].copy()  # we dont have any values of gtp after 2022
+    df_final = df_final[df_final['year'] <= 2022].copy()  # we dont have any values of gdp after 2022
+    
+    # remove aggregate entities (keep only countries with iso_code)
+    df_final = df_final.dropna(subset=['iso_code'])
 
     # time to save our work! 
     output_dir = os.path.dirname(output_path)
@@ -36,7 +41,15 @@ def preprocess_co2_data(input_path: str, output_path: str):
         os.makedirs(output_dir, exist_ok=True)
     
     df_final.to_csv(output_path, index=False)
-    print(f"the final dataset contains {df_final.shape[0]} rows and {df_final.shape[1]} columns")
+    
+    # print statistics
+    print()
+    print(f"dataset saved to '{output_path}'")
+    print(f"rows: {df_final.shape[0]:,}")
+    print(f"columns: {df_final.shape[1]}")
+    print(f"year range: {df_final['year'].min():.0f}-{df_final['year'].max():.0f}")
+    print(f"unique countries: {df_final['country'].nunique()}")
+    print(f"file size: {os.path.getsize(output_path) / 1024:.1f} KB")
 
 if __name__ == '__main__':
     input_file = '../data/owid-co2-data.csv'

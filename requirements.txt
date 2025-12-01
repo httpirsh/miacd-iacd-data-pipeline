@@ -2,7 +2,7 @@
 # Install: pip install -r requirements.txt
 
 # Data Processing
-pandas==2.3.3
+pandas==2.2.0
 
 # Kafka Integration (maintained fork with Python 3.12+ support)
 kafka-python-ng==2.2.3
