@@ -28,6 +28,6 @@ spec:
         - name: SPARK_WORKER_CORES
           value: "1"
         - name: SPARK_WORKER_MEMORY
-          value: "512m"
+          value: "1g"
         - name: SPARK_WORKER_WEBUI_PORT
           value: "8081"
