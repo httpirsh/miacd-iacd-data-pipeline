@@ -1,23 +1,30 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: kafka-producer
   labels:
     app: kafka-producer
 spec:
-  replicas: 1  # because the producer is a one-time job - more replicas = data duplication
-  selector:
-    matchLabels:
-      app: kafka-producer
+  # Job runs once and completes - no automatic restarts = no data duplication
+  backoffLimit: 2  # retry up to 2 times on failure
+  ttlSecondsAfterFinished: 86400  # delete job after 24 hours
   template:
     metadata:
       labels:
         app: kafka-producer
     spec:
+      restartPolicy: OnFailure
       containers:
       - name: producer
-        image: kafka-producer:latest
+        image: kafka-producer:v1
         imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BROKER
           value: "kafka.default.svc.cluster.local:9092"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

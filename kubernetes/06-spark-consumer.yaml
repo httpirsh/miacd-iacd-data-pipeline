@@ -16,8 +16,15 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: spark-consumer:latest
+        image: spark-consumer:v1
         imagePullPolicy: IfNotPresent
         env:
-        - name: PYTHONUNBUFFERED  # para o output do python aparecer nos logs logo
+        - name: PYTHONUNBUFFERED
           value: "1"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
