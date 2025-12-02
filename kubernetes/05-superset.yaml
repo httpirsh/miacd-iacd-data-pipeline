@@ -42,14 +42,21 @@ spec:
     spec:
       containers:
       - name: superset
-        image: superset-postgres:v2
-        imagePullPolicy: IfNotPresent
+        image: superset:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8088
           name: http
         env:
         - name: SUPERSET_SECRET_KEY
           value: "your_secret_key_here_change_in_production"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
         volumeMounts:
         - name: superset-storage
           mountPath: /app/superset_home

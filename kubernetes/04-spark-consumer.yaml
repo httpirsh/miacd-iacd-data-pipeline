@@ -16,8 +16,8 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: spark-consumer:v1
-        imagePullPolicy: IfNotPresent
+        image: spark-consumer:latest
+        imagePullPolicy: Never
         env:
         - name: PYTHONUNBUFFERED
           value: "1"

@@ -164,7 +164,11 @@ def process_clustering(batch_df, batch_id):
             "country", "iso_code", "avg_co2", "avg_co2_per_capita", 
             "avg_gdp", "avg_population", "data_points",
             "first_year", "last_year", "avg_co2_recent", "cluster"
-        ).withColumn("batch_id", lit(batch_id))
+        ).withColumn("batch_id", lit(batch_id)).select(
+            "batch_id", "country", "iso_code", "avg_co2", "avg_co2_per_capita",
+            "avg_gdp", "avg_population", "data_points", "first_year", "last_year",
+            "avg_co2_recent", "cluster"
+        )
         
         cluster_stats_db = cluster_stats.withColumn("batch_id", lit(batch_id))
         

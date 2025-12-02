@@ -30,9 +30,12 @@ A complete data engineering pipeline for analyzing global CO2 emissions with **K
 
 ### Components
 1. **Apache Kafka (KRaft mode)** - Message broker for streaming (no Zookeeper)
-2. **Apache Spark (Master + Worker)** - ML clustering with K-means (k=3)
+2. **Apache Spark (Local Mode)** - ML clustering with K-means (k=3)
 3. **PostgreSQL** - Storage for clustering results
 4. **Apache Superset** - Data visualization dashboards
+
+**Why Spark Local Mode?**
+For this dataset size (23K records), Spark runs in local mode within the consumer pod. No separate Master/Worker cluster needed - simpler, faster, and sufficient for the workload.
 
 ### Data Flow
 ```
@@ -117,14 +120,12 @@ miacd-iacd-data-pipeline/
 │   └── Dockerfile               # Custom Superset image with PostgreSQL driver
 ├── postgres/
 │   └── init.sql                 # Database schema (tables, views, indexes)
-└── kubernetes/                  # K8s deployment manifests (01-07)
+└── kubernetes/                  # K8s deployment manifests (01-05)
     ├── 01-postgres.yaml         # PostgreSQL (PVC, ConfigMap, Deployment, Service)
     ├── 02-kafka.yaml            # Kafka KRaft (Service Headless, StatefulSet)
-    ├── 03-spark-master.yaml     # Spark master (Service, Deployment)
-    ├── 04-spark-worker.yaml     # Spark worker (Deployment)
-    ├── 05-kafka-producer.yaml   # Kafka producer (Deployment)
-    ├── 06-spark-consumer.yaml   # Spark consumer (Deployment)
-    └── 07-superset.yaml         # Superset (Service, PVC, Deployment)
+    ├── 03-kafka-producer.yaml   # Kafka producer (Job - runs once)
+    ├── 04-spark-consumer.yaml   # Spark consumer in local mode (Deployment)
+    └── 05-superset.yaml         # Superset (Service, PVC, Deployment)
 ```
 
 ## Usage
@@ -147,23 +148,37 @@ miacd-iacd-data-pipeline/
    eval $(minikube docker-env)
    ```
 
-3. **Build Docker Images**
+3. **Build Docker Images in Minikube**
+   
+   **CRITICAL**: All images MUST be built in Minikube's Docker daemon:
+   
    ```bash
+   # Configure shell to use Minikube's Docker
+   eval $(minikube docker-env)
+   
    # Build Kafka producer
-   docker build -t kafka-producer:latest ./kafka
+   docker build -t kafka-producer:latest -f kafka/Dockerfile .
    
    # Build Spark consumer
-   docker build -t spark-consumer:latest ./spark
+   docker build -t spark-consumer:latest -f spark/Dockerfile spark/
    
-   # Build Superset with PostgreSQL driver (REQUIRED!)
-   docker build -t superset-postgres:v2 ./superset
+   # Build Superset with PostgreSQL driver
+   docker build -t superset:latest -f superset/Dockerfile superset/
    ```
    
-   **Important**: The Superset image MUST be built locally because the official `apache/superset:latest` does NOT include database drivers. Our custom image installs the PostgreSQL driver (`psycopg2-binary`).
+   **Why this setup?**
+   - **`eval $(minikube docker-env)`**: Makes Docker CLI use Minikube's internal registry
+   - **`:latest` tag**: Standard tag for local development (everyone builds their own)
+   - **`imagePullPolicy: Never`** in manifests: Forces Kubernetes to use local images only
+   - **Superset custom build**: Official image lacks database drivers; ours includes `psycopg2-binary`
 
 4. **Deploy to Kubernetes**
    ```bash
+   # Apply all manifests
    kubectl apply -f kubernetes/
+   
+   # Note: imagePullPolicy is set to "Never" in all manifests
+   # This ensures Kubernetes ONLY uses locally built images
    ```
 
 5. **Verify Deployment**
@@ -171,30 +186,35 @@ miacd-iacd-data-pipeline/
    ```bash
    kubectl get pods
    
-   # Expected pods:
-   # - kafka-0
-   # - kafka-producer-xxx
-   # - postgres-xxx
-   # - spark-consumer-xxx
-   # - spark-master-xxx
-   # - spark-worker-xxx
-   # - superset-xxx
+   # Expected output:
+   # kafka-0                      1/1     Running     0          2m
+   # kafka-producer-xxxxx        1/1     Running     0          2m    (Job - shows Completed after ~5-10min)
+   # postgres-xxxxx              1/1     Running     0          2m
+   # spark-consumer-xxxxx        1/1     Running     0          2m    (Spark local mode)
+   # superset-xxxxx              1/1     Running     0          2m
    ```
+   
+   **Note**: The `kafka-producer` is a **Job** (not Deployment) that runs once to stream all 23,405 records to Kafka, then shows `Completed`. This prevents data duplication on pod restarts.
 
 ### Verification
 
 Check logs to ensure data is flowing:
 ```bash
-# Kafka Producer
-kubectl logs deployment/kafka-producer --tail=20
+# Kafka Producer (Job - check completion)
+kubectl logs job/kafka-producer --tail=20
 
-# Spark Consumer
-kubectl logs deployment/spark-consumer --tail=50
+# Spark Consumer (watch processing)
+kubectl logs -l app=spark-consumer --tail=50
 
-# PostgreSQL Data
-kubectl exec deployment/postgres -- psql -U postgres -d co2_emissions -c \
-  "SELECT COUNT(*) FROM co2_clusters;"
+# PostgreSQL Data (verify clustering results)
+kubectl exec -l app=postgres -- psql -U postgres -d co2_emissions -c \
+  "SELECT cluster, COUNT(*) as countries FROM co2_clusters GROUP BY cluster ORDER BY cluster;"
 ```
+
+**Expected Results**:
+- Producer: Should show "sent: [country] - [year]" messages, eventually completes
+- Consumer: Shows "batch X with Y records", "3 clusters for Z countries", "saved to PostgreSQL"
+- PostgreSQL: Should show 3 clusters with countries distributed across them
 
 ### Accessing Services
 
@@ -215,10 +235,11 @@ kubectl exec deployment/postgres -- psql -U postgres -d co2_emissions -c \
 3. **Connect to PostgreSQL Database**:
    - Settings → Data: Database Connections → + DATABASE
    - Select **PostgreSQL**
-   - **SQLALCHEMY URI**: 
-     ```
-     postgresql://postgres:postgres@postgres:5432/co2_emissions
-     ```
+   - **Host**: `postgres.default.svc.cluster.local` (or just `postgres`)
+   - **Port**: `5432`
+   - **Database**: `co2_emissions`
+   - **Username**: `postgres`
+   - **Password**: `postgres`
    - Advanced → SQL Lab → Enable all options
    - Click **TEST CONNECTION** → should show ✅ "Connection looks good!"
    - Click **CONNECT**
@@ -233,13 +254,9 @@ kubectl exec deployment/postgres -- psql -U postgres -d co2_emissions -c \
 
 **Troubleshooting**:
 - If connection fails: verify port-forward is running (`kubectl port-forward service/superset 8088:8088`)
-- If "Could not load database driver" error: rebuild Superset image with `docker build -t superset-postgres:v2 ./superset`
+- If "Could not load database driver" error: rebuild Superset image
 
-#### Spark Master UI
-```bash
-kubectl port-forward service/spark-master 8080:8080
-# Access at http://localhost:8080
-```
+**Note**: Spark runs in **local mode** within the consumer pod (no separate Master/Worker UI).
 
 ## Spark Consumer Processing
 
@@ -276,6 +293,7 @@ See [`LOGICA_CONSUMER.md`](LOGICA_CONSUMER.md) for detailed explanation.
 ## ML Clustering Details
 
 ### K-means Configuration
+- **Execution mode**: Spark local mode (single-node, sufficient for 23K records)
 - **Number of clusters (k)**: 3
 - **Features used**: avg_co2, avg_co2_per_capita, avg_gdp, avg_population
 - **Pre-processing**: StandardScaler (feature normalization)

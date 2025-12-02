@@ -16,8 +16,8 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: producer
-        image: kafka-producer:v1
-        imagePullPolicy: IfNotPresent
+        image: kafka-producer:latest
+        imagePullPolicy: Never
         env:
         - name: KAFKA_BROKER
           value: "kafka.default.svc.cluster.local:9092"
