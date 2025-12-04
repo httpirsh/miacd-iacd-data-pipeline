@@ -248,21 +248,7 @@ PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions -c "
 
 ---
 
-## 📈 Understanding the Clusters
 
-Based on K-means clustering (k=3), countries are grouped by emission patterns:
-
-### Expected Cluster Patterns:
-- **Cluster 0**: Low emissions, low GDP, lower population
-  - Examples: Developing nations, small countries
-  
-- **Cluster 1**: Medium emissions, moderate GDP, varied population
-  - Examples: Emerging economies, mid-sized industrial nations
-  
-- **Cluster 2**: High emissions, high GDP, large population
-  - Examples: Major industrial nations, large developed countries
-
----
 
 ## 🎯 Next Steps
 
