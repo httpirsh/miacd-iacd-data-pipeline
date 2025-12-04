@@ -63,10 +63,10 @@ ORDER BY cluster, avg_co2 DESC
 
 ### Step 3: Configure the Chart
 
-You will see these configuration options (NOT "series"):
+You will see these configuration options (**not** "series"):
 
-#### 1. **Dimensions** (The "Series" Equivalent)
-This is where you select which metrics to display as axes.
+#### 1. **Dimensions**
+This is where you select which metrics to display as axes. (Note: In other chart types, this might be called "Series", but Parallel Coordinates uses "Dimensions" instead.)
 
 Select multiple columns:
 - ✅ `avg_co2` - Total CO2 emissions

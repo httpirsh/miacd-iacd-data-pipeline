@@ -177,6 +177,8 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
   - **Legend**: Show cluster colors
 
 #### Chart 8: Parallel Coordinates (Multi-dimensional Cluster Analysis) - NEW!
+**Note**: This is a new chart added to the guide. The original Chart 8 (Batch Processing Timeline) has been renumbered to Chart 9.
+
 - **Dataset**: Use SQL Lab to create optimized dataset:
   ```sql
   SELECT 
@@ -198,7 +200,7 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
 - **Save as Virtual Dataset**: `cluster_parallel_data`
 - **Chart Type**: Parallel Coordinates
 - **Configuration**:
-  - **Dimensions** (Series): Select multiple numeric columns to visualize:
+  - **Dimensions**: Select multiple numeric columns to visualize:
     - `avg_co2` - Total CO2 emissions
     - `avg_co2_per_capita` - Per capita emissions
     - `avg_gdp` - Economic output
@@ -213,8 +215,8 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
   - **Show Data Table**: Enable to see country names
   
 **Important Notes**:
-- Parallel Coordinates charts do NOT have a traditional "series" field
-- Instead, they use "Dimensions" which are the numeric columns you want to visualize
+- Parallel Coordinates charts **do not** have a traditional "series" field
+- Instead, they use **"Dimensions"** which are the numeric columns you want to visualize
 - Each line in the chart represents one country
 - The position of each line on each axis shows the value for that metric
 - Lines are colored by the "Color Metric" (cluster in this case)
