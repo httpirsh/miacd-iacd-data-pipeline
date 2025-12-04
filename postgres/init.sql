@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS cluster_stats (
     avg_co2_cluster DECIMAL(15,4),
     avg_co2_per_capita_cluster DECIMAL(15,4),
     avg_gdp_cluster DECIMAL(20,4),
+    silhouette_score DECIMAL(10,6),
     processing_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

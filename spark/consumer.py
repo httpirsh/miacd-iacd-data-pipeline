@@ -4,6 +4,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 from pyspark.sql.functions import when
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
+from pyspark.ml.evaluation import ClusteringEvaluator
 from pyspark.ml import Pipeline
 import time
 
@@ -72,7 +73,7 @@ def perform_clustering(df, k=3):
     cleaned_data = df.na.drop()  # bye bye NaN values
     
     if cleaned_data.count() < k:  # if there are less than k countries, we can't perform clustering
-        return None, None
+        return None, None, None
     
     # prepare features for clustering
     feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
@@ -88,9 +89,15 @@ def perform_clustering(df, k=3):
     model = pipeline.fit(cleaned_data)
     results = model.transform(cleaned_data)
     
-    print(f"{k} clusters for {cleaned_data.count()} countries")
+    # calculate Silhouette Score
+    evaluator = ClusteringEvaluator(featuresCol="scaled_features", 
+                                     predictionCol="cluster",
+                                     metricName="silhouette")
+    silhouette_score = evaluator.evaluate(results)
     
-    return results, cleaned_data.count()
+    print(f"{k} clusters for {cleaned_data.count()} countries (Silhouette Score: {silhouette_score:.4f})")
+    
+    return results, cleaned_data.count(), silhouette_score
 
 
 def calculate_cluster_stats(results):
@@ -150,7 +157,7 @@ def process_clustering(batch_df, batch_id):
             print(f"batch {batch_id}: not enough countries for clustering (need 3, got {countries_count})")
             return
         
-        results, num_countries = perform_clustering(country_stats, k=3)  # step 3 - perform clustering
+        results, num_countries, silhouette_score = perform_clustering(country_stats, k=3)  # step 3 - perform clustering
         
         if results is None:
             print(f"batch {batch_id}: clustering failed")
@@ -170,7 +177,8 @@ def process_clustering(batch_df, batch_id):
             "avg_co2_recent", "cluster"
         )
         
-        cluster_stats_db = cluster_stats.withColumn("batch_id", lit(batch_id))
+        cluster_stats_db = cluster_stats.withColumn("batch_id", lit(batch_id)) \
+                                         .withColumn("silhouette_score", lit(silhouette_score))
         
         print("saving to postgreSQL!!")
         save_to_postgresql(results_for_db, batch_id, "co2_clusters")

@@ -84,7 +84,7 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
   - **Color**: Use 3 distinct colors for each cluster
   - **Y-Axis Label**: "Number of Countries"
 
-#### Chart 2: Cluster Characteristics (Table)
+#### Chart 2: Cluster Characteristics (Table) - DONE!
 - **Dataset**: `cluster_analysis`
 - **Chart Type**: Table
 - **Configuration**:
@@ -140,7 +140,7 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
   - **Sort**: `avg_co2` DESC
   - **Filters**: Add filter for `cluster` selection
 
-#### Chart 6: Cluster Distribution Map (if geographic data available)
+#### Chart 6: Cluster Distribution Map (if geographic data available) - DONE!
 - **Dataset**: `co2_clusters`
 - **Chart Type**: Country Map
 - **Configuration**:
@@ -182,7 +182,7 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
 
 **Dashboard Name**: Clustering Batch Analysis
 
-#### Chart 8: Batch Processing Timeline (Line Chart)
+#### Chart 8: Batch Processing Timeline (Line Chart) - DONE!
 - **Dataset**: `cluster_stats`
 - **Chart Type**: Line Chart
 - **Configuration**:
@@ -191,26 +191,6 @@ Navigate to **Data** → **Datasets** → **+ Dataset**
   - **Group By**: `cluster`
   - **Chart Title**: "Countries Processed per Cluster Over Time"
   - **Legend**: Show
-
-#### Chart 9: Latest Batch Summary (Big Numbers)
-- **Dataset**: Use SQL Lab:
-  ```sql
-  SELECT 
-    cluster,
-    num_countries,
-    ROUND(avg_co2_cluster, 2) as avg_co2,
-    ROUND(avg_co2_per_capita_cluster, 2) as avg_per_capita,
-    ROUND(avg_gdp_cluster, 2) as avg_gdp
-  FROM cluster_stats
-  WHERE batch_id = (SELECT MAX(batch_id) FROM cluster_stats)
-  ORDER BY cluster
-  ```
-- **Chart Type**: Big Number with Trendline (3 separate charts)
-- **Metrics**: 
-  - Cluster 0 total countries
-  - Cluster 1 total countries
-  - Cluster 2 total countries
-
 
 ---
 
