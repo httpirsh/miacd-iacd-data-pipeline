@@ -419,6 +419,7 @@ Additional documentation files:
 - **[REFATORACAO_CONSUMER.md](REFATORACAO_CONSUMER.md)** - Consumer refactoring
 - **[AUDITORIA_KUBERNETES.md](AUDITORIA_KUBERNETES.md)** - Kubernetes manifests audit
 - **[SUPERSET_SETUP.md](SUPERSET_SETUP.md)** - Superset configuration guide
+- **[PARALLEL_COORDINATES_GUIDE.md](PARALLEL_COORDINATES_GUIDE.md)** - Parallel Coordinates chart setup and troubleshooting
 
 ## Technology Stack
 
