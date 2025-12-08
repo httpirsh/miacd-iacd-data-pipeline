@@ -1,275 +1,46 @@
-# Superset Dashboard Setup Guide - ML Clustering Results
+# CO2 Clustering Dashboard - Essential Setup
 
-## 🎯 Quick Start
+## How to Visualize the Dashboard
 
-**Superset URL**: http://localhost:8088  
-**Default Credentials**: `admin` / `admin`
+1. **Access Superset**
+   - Open your browser and go to: `http://localhost:8088` (or your server’s IP)
+   - Login with:
+     - Username: `admin`
+     - Password: `admin`
 
----
-
-## 📊 Current Database Schema
-
-**Database**: `co2_emissions`  
-**User**: `postgres`  
-**Password**: `postgres`
-
-### Available Tables:
-1. **co2_clusters** - K-means clustering results by country
-2. **cluster_stats** - Aggregated statistics per cluster
-
-### Available Views:
-1. **cluster_analysis** - Comprehensive cluster overview
+2. **Explore the Dashboard**
+   - All datasets and dashboards are already set up.
+   - Go to **Dashboards** and select:
+     - `K-means Clustering Results (k=3)`
+     - or `Country Clustering Details`
+   - Use filters and interact with the charts as needed.
 
 ---
 
-## 🔌 Step 1: Add Database Connection
+**No further setup is required. Just log in and start exploring!**
 
-1. Navigate to **Settings** → **Database Connections** → **+ Database**
-2. Select **PostgreSQL** from the list
-3. Enter connection details:
-   ```
-   Host: postgres.default.svc.cluster.local
-   Port: 5432
-   Database: co2_emissions
-   Username: postgres
-   Password: postgres
-   Display Name: CO2 Emissions PostgreSQL
-   ```
-4. **Advanced** → **SQL Lab** → Enable:
-   - ✅ Expose database in SQL Lab
-   - ✅ Allow CREATE TABLE AS
-   - ✅ Allow CREATE VIEW AS
-   - ✅ Allow DML
-5. Click **Test Connection** → **Connect**
+## Dashboard Chart Descriptions
 
----
+### Chart 1: Countries per Cluster (Bar Chart)
+Shows the number of countries in each cluster, helping visualize how countries are grouped by emission patterns.
 
-## 📁 Step 2: Add Datasets
+### Chart 2: Cluster Characteristics (Table)
+Summarizes key statistics for each cluster, such as average CO₂ emissions, GDP, and population, making it easy to compare clusters.
 
-Navigate to **Data** → **Datasets** → **+ Dataset**
+### Chart 3: Average CO₂ by Cluster (Bar Chart)
+Displays the average CO₂ emissions for each cluster, highlighting which group contributes most to global emissions.
 
-### Dataset 1: CO2 Clusters
-- **Database**: CO2 Emissions PostgreSQL
-- **Schema**: public
-- **Table**: `co2_clusters`
-- Click **Add**
+### Chart 4: Per Capita Emissions by Cluster (Bar Chart)
+Shows the average CO₂ emissions per person in each cluster, useful for understanding individual impact.
 
-### Dataset 2: Cluster Stats
-- **Database**: CO2 Emissions PostgreSQL
-- **Schema**: public
-- **Table**: `cluster_stats`
-- Click **Add**
+### Chart 5: Country-Level Table
+Lists countries with their cluster assignment and key metrics, allowing for detailed inspection and filtering.
 
-### Dataset 3: Cluster Analysis View
-- **Database**: CO2 Emissions PostgreSQL
-- **Schema**: public
-- **Table**: `cluster_analysis`
-- Click **Add**
+### Chart 6: Global Cluster Map
+Visualizes clusters on a world map, showing geographic distribution of emission patterns.
 
----
+### Chart 7: GDP vs CO₂ Scatter Plot
+Plots countries by GDP and total CO₂ emissions, with clusters highlighted, to reveal economic and environmental relationships.
 
-## 📊 Step 3: Create Dashboards
-
-### Dashboard 1: Cluster Overview
-
-**Dashboard Name**: K-means Clustering Results (k=3)
-
-#### Chart 1: Countries per Cluster (Bar Chart)
-- **Dataset**: `cluster_analysis`
-- **Chart Type**: Bar Chart
-- **Configuration**:
-  - **X-Axis**: `cluster` (0, 1, 2)
-  - **Metrics**: `country_count` (SUM)
-  - **Chart Title**: "Number of Countries per Cluster"
-  - **Color**: Use 3 distinct colors for each cluster
-  - **Y-Axis Label**: "Number of Countries"
-
-#### Chart 2: Cluster Characteristics (Table) - DONE!
-- **Dataset**: `cluster_analysis`
-- **Chart Type**: Table
-- **Configuration**:
-  - **Columns**: 
-    - `cluster`
-    - `country_count`
-    - `avg_co2` (format: `,d`)
-    - `avg_co2_per_capita` (format: `.2f`)
-    - `avg_gdp` (format: `,.0f`)
-  - **Chart Title**: "Cluster Characteristics Summary"
-  - **Sort**: `cluster` ASC
-  - **Conditional Formatting**: Highlight highest values
-
-#### Chart 3: Average CO2 by Cluster (Horizontal Bar)
-- **Dataset**: `cluster_analysis`
-- **Chart Type**: Bar Chart (Horizontal)
-- **Configuration**:
-  - **Y-Axis**: `cluster`
-  - **Metrics**: `avg_co2` (AVG)
-  - **Chart Title**: "Average CO2 Emissions by Cluster"
-  - **X-Axis Label**: "CO2 (Million Tonnes)"
-  - **Color**: Gradient (low to high)
-
-#### Chart 4: Per Capita Emissions by Cluster (Horizontal Bar)
-- **Dataset**: `cluster_analysis`
-- **Chart Type**: Bar Chart (Horizontal)
-- **Configuration**:
-  - **Y-Axis**: `cluster`
-  - **Metrics**: `avg_co2_per_capita` (AVG)
-  - **Chart Title**: "Average Per Capita Emissions by Cluster"
-  - **X-Axis Label**: "Tonnes per Person"
-  - **Color**: Red gradient
-
----
-
-### Dashboard 2: Country-Level Analysis
-
-**Dashboard Name**: Country Clustering Details
-
-#### Chart 5: Countries by Cluster (Table with Filters)
-- **Dataset**: `co2_clusters`
-- **Chart Type**: Table
-- **Configuration**:
-  - **Columns**: 
-    - `country`
-    - `cluster`
-    - `avg_co2` (format: `,.2f`)
-    - `avg_co2_per_capita` (format: `.2f`)
-    - `avg_gdp` (format: `,.0f`)
-    - `avg_population` (format: `,.0f`)
-  - **Chart Title**: "Country Clustering Results"
-  - **Page Length**: 20
-  - **Sort**: `avg_co2` DESC
-  - **Filters**: Add filter for `cluster` selection
-
-#### Chart 6: Cluster Distribution Map (if geographic data available) - DONE!
-- **Dataset**: `co2_clusters`
-- **Chart Type**: Country Map
-- **Configuration**:
-  - **Country Column**: `iso_code`
-  - **Metric**: `cluster` (Categorical color)
-  - **Chart Title**: "Global Cluster Distribution"
-  - **Color Scheme**: 3 distinct colors for clusters
-
-#### Chart 7: GDP vs CO2 Scatter (Colored by Cluster)
-- **Dataset**: Use SQL Lab:
-  ```sql
-  SELECT 
-    country,
-    cluster,
-    avg_gdp,
-    avg_co2,
-    avg_co2_per_capita,
-    avg_population
-  FROM co2_clusters
-  WHERE avg_gdp IS NOT NULL 
-    AND avg_co2 IS NOT NULL
-  ORDER BY avg_co2 DESC
-  LIMIT 100
-  ```
-- **Save as Virtual Dataset**: `cluster_scatter_data`
-- **Chart Type**: Scatter Plot
-- **Configuration**:
-  - **X-Axis**: `avg_gdp` (log scale)
-  - **Y-Axis**: `avg_co2` (log scale)
-  - **Color**: `cluster` (Categorical)
-  - **Size**: `avg_population`
-  - **Label**: `country`
-  - **Chart Title**: "GDP vs CO2 by Cluster"
-  - **Legend**: Show cluster colors
-
----
-
-### Dashboard 3: Cluster Statistics Over Time
-
-**Dashboard Name**: Clustering Batch Analysis
-
-#### Chart 8: Batch Processing Timeline (Line Chart) - DONE!
-- **Dataset**: `cluster_stats`
-- **Chart Type**: Line Chart
-- **Configuration**:
-  - **X-Axis**: `processing_time`
-  - **Metrics**: `num_countries` (SUM by cluster)
-  - **Group By**: `cluster`
-  - **Chart Title**: "Countries Processed per Cluster Over Time"
-  - **Legend**: Show
-
----
-
-## 🎨 Dashboard Layout Tips
-
-### Recommended Layout:
-```
-┌─────────────────────────────────────────────────┐
-│  Dashboard Filters (Cluster selector)           │
-├─────────────────────┬───────────────────────────┤
-│  Chart 1 (50%)      │  Chart 2 (50%)            │
-├─────────────────────┴───────────────────────────┤
-│  Chart 3 (Full Width Table)                     │
-
-```
-
-### Filters to Add:
-1. **Cluster Filter** (0, 1, 2) - Multi-select
-2. **Batch ID Filter** - To compare different processing runs
-3. **Country Search** - Text filter for specific countries
-
----
-
-## 🔧 Troubleshooting
-
-### Can't Connect to Database?
-```bash
-# Check if port-forward is active
-ps aux | grep "kubectl port-forward postgres"
-
-# Restart port-forward
-kubectl port-forward postgres-0 5432:5432 &
-
-# Test connection
-PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions -c "SELECT COUNT(*) FROM co2_clusters;"
-```
-
-### No Data in Tables?
-```bash
-# Check if Spark consumer has run
-kubectl logs -l app=spark-master --tail=50
-
-# Verify data exists
-PGPASSWORD=postgres psql -h localhost -U postgres -d co2_emissions -c "
-  SELECT cluster, COUNT(*) as countries 
-  FROM co2_clusters 
-  GROUP BY cluster;
-"
-```
-
-### Empty Clusters?
-- The Spark consumer needs to run first to populate the tables
-- Check if Kafka producer has sent data
-- Verify Spark job completed successfully
-
----
-
-
-
-## 🎯 Next Steps
-
-1. ✅ Connect to PostgreSQL database (`co2_emissions`)
-2. ✅ Add all 3 datasets (co2_clusters, cluster_stats, cluster_analysis)
-3. ✅ Create Cluster Overview dashboard
-4. ✅ Create Country-Level Analysis dashboard
-5. ✅ Add filters for interactivity
-6. ✅ Run custom SQL queries for deeper insights
-
----
-
-## 📚 Additional Resources
-
-- [Superset Documentation](https://superset.apache.org/docs/intro)
-- [PostgreSQL JDBC](https://jdbc.postgresql.org/)
-- [K-means Clustering](https://spark.apache.org/docs/latest/ml-clustering.html)
-
----
-
-**Happy Visualizing! 📊🔬**
-
-*Access Superset at: http://localhost:8088*  
-*Default credentials: admin/admin*
+### Chart 8: Cluster Timeline (Line Chart)
+Tracks how many countries are processed in each cluster over time, useful for monitoring data updates or batch processing.

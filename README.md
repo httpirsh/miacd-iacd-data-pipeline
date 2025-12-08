@@ -71,7 +71,7 @@ kubectl logs -l app=spark-consumer --tail=50
 kubectl port-forward service/superset 8088:8088
 ```
 
-Access Superset at `http://localhost:8088` (admin/admin). See [`SUPERSET_SETUP.md`](SUPERSET_SETUP.md) for database connection and dashboard creation.
+Access Superset at `http://localhost:8088` (admin/admin).
 
 ## Spark Consumer Processing
 
