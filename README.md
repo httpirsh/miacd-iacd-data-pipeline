@@ -111,6 +111,6 @@ Kafka 4.1.0 (KRaft) • Spark 4.0.1 • PostgreSQL 15 • Superset • Kubernete
 ## Additional Documentation
 
 - [CONSUMER_LOGIC.md](CONSUMER_LOGIC.md) - Consumer logic details
-- [SUPERSET_SETUP.md](SUPERSET_SETUP.md) - Dashboard setup
 - [STOP_RESUME.md](STOP_RESUME.md) - How to stop and resume the project
+
 
