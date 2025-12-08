@@ -48,7 +48,7 @@ Minikube, kubectl, Docker
 
 ```bash
 # 1. Start Minikube
-minikube start --cpus=4 --memory=8192
+minikube start --cpus=4 --memory=3072
 
 # 2. Build images in Minikube
 eval $(minikube docker-env)
