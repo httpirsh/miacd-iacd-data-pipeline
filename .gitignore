@@ -1,7 +1,7 @@
 # Data files
-data/owid-co2-data.csv
-data/reduced_co2.csv
-kafka/data/reduced_co2.csv
+# data/owid-co2-data.csv
+# data/reduced_co2.csv
+# kafka/data/reduced_co2.csv
 
 # Python
 __pycache__/

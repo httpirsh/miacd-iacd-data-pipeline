@@ -6,7 +6,7 @@ A complete data engineering pipeline for analyzing global CO2 emissions with **K
 
 ### Dataset
 **Source:** Our World in Data - CO2 Emissions Dataset
-- **Processed**: 23,405 rows (1900-2024), 7 columns, 1.4MB
+- **Processed**: 31,076 rows (1900-2022), 7 columns, 1.3MB
 - **Variables**: country, year, iso_code, population, gdp, co2, co2_per_capita
 
 ## Architecture
@@ -42,34 +42,19 @@ project/
 ## Usage
 
 ### Prerequisites
-Minikube, kubectl, Docker
+Minikube, kubectl, Docker, GNU Make
 
-### Deployment Steps
+### Quick Start (Recommended)
 
 ```bash
 # 1. Start Minikube
 minikube start --cpus=4 --memory=3072
 
-# 2. Build images in Minikube
-eval $(minikube docker-env)
-docker build -t kafka-producer:latest -f kafka/Dockerfile .
-docker build -t spark-consumer:latest -f spark/Dockerfile spark/
-docker build -t superset:latest -f superset/Dockerfile superset/
-
-# 3. Deploy
-kubectl apply -f kubernetes/
-
-# 4. Verify
-kubectl get pods
-kubectl logs job/kafka-producer --tail=20
-kubectl logs -l app=spark-consumer --tail=50
+# 2. Run the entire pipeline using Makefile
+make run
 ```
 
-### Accessing Services
-
-```bash
-kubectl port-forward service/superset 8088:8088
-```
+This will build all Docker images, deploy Kubernetes manifests, and set up port forwarding for Superset automatically.
 
 Access Superset at `http://localhost:8088` (admin/admin).
 
@@ -79,7 +64,7 @@ Streaming pipeline that cleans data, aggregates by country, performs K-means clu
 
 ## ML Clustering
 
-K-means clustering (k=3) with Silhouette Score ~0.96. See [`CONSUMER_LOGIC.md`](CONSUMER_LOGIC.md) for algorithm details.
+K-means clustering (k=3) with Silhouette Score ~0.7. See [`CONSUMER_LOGIC.md`](CONSUMER_LOGIC.md) for algorithm details.
 
 ## Useful Commands
 
@@ -112,5 +97,3 @@ Kafka 4.1.0 (KRaft) • Spark 4.0.1 • PostgreSQL 15 • Superset • Kubernete
 
 - [CONSUMER_LOGIC.md](CONSUMER_LOGIC.md) - Consumer logic details
 - [STOP_RESUME.md](STOP_RESUME.md) - How to stop and resume the project
-
-
