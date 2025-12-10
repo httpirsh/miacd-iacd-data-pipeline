@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset
+  labels:
+    app: superset
+spec:
+  ports:
+    - port: 8088
+      targetPort: 8088
+  selector:
+    app: superset
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: superset-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+      
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: superset
+  template:
+    metadata:
+      labels:
+        app: superset
+    spec:
+      containers:
+      - name: superset
+        image: superset:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8088
+          name: http
+        env:
+        - name: SUPERSET_SECRET_KEY
+          value: "your_secret_key_here_change_in_production"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: superset-storage
+          mountPath: /app/superset_home
+        command:
+          - /bin/bash
+          - -c
+          - |
+            superset db upgrade &&
+            superset fab create-admin \
+              --username admin \
+              --firstname Admin \
+              --lastname User \
+              --email admin@superset.com \
+              --password admin &&
+            superset init &&
+            gunicorn -b 0.0.0.0:8088 --timeout 120 'superset.app:create_app()'
+      volumes:
+      - name: superset-storage
+        persistentVolumeClaim:
+          claimName: superset-pvc

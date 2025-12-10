@@ -5,7 +5,7 @@ USER root
 WORKDIR /app
 
 # postgresql and pandas for data processing
-RUN pip install --no-cache-dir pandas==2.2.0 psycopg2-binary==2.9.9
+RUN pip install --no-cache-dir pandas==2.3.3 psycopg2-binary==2.9.9
 
 COPY consumer.py .
 
