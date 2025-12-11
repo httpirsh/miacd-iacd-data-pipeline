@@ -59,11 +59,20 @@ def aggregate_by_country(df):
         max("year").alias("last_year"),
         avg(when(col("year") >= 2010, col("co2"))).alias("avg_co2_recent")
     
-    ).filter(
+    )
+    # Log excluded countries for debugging
+    excluded = df.groupBy("country", "iso_code").agg(
+        count_func("*").alias("data_points")
+    ).filter(col("data_points") < 1)
+    excluded_countries = [row['country'] for row in excluded.collect()]
+    if excluded_countries:
+        print(f"Excluded countries (less than 1 year of data): {excluded_countries}")
+    country_stats = country_stats.filter(
         (col("avg_co2").isNotNull()) & 
         (col("avg_co2_per_capita").isNotNull()) & 
-        (col("data_points") >= 5)
+        (col("data_points") >= 1)
     )
+    return country_stats
     
     return country_stats
 
@@ -153,8 +162,8 @@ def process_clustering(batch_df, batch_id):
         country_stats = aggregate_by_country(all_data)  # step 2 - aggregate by country
         countries_count = country_stats.count()
         
-        if countries_count < 3:
-            print(f"batch {batch_id}: not enough countries for clustering (need 3, got {countries_count})")
+        if countries_count < 2:
+            print(f"batch {batch_id}: not enough countries for clustering (need 2, got {countries_count})")
             return
         
         results, num_countries, silhouette_score = perform_clustering(country_stats, k=3)  # step 3 - perform clustering
@@ -269,7 +278,7 @@ try:  # lets try to process the data
     query = kafka_stream.writeStream \
         .outputMode("update") \
         .foreachBatch(process_clustering) \
-        .trigger(processingTime="15 seconds") \
+        .trigger(processingTime="60 seconds") \
         .start()
     
     print("press ctrl+c to stop")

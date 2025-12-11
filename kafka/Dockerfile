@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir kafka-python-ng==2.2.3 pandas==2.3.3
 
-COPY kafka/producer.py .
-COPY data/reduced_co2.csv ./data/reduced_co2.csv
+	COPY kafka/producer.py .
+	COPY data/reduced_co2.csv ./data/reduced_co2.csv
 
 CMD ["python", "producer.py"]
