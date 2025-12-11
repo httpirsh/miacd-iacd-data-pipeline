@@ -141,75 +141,75 @@ Chad       | 2.5     | 11000000000   | 15000000      | 1
 
 ---
 
+
 ### 5️⃣ **Clustering Preparation** (lines 116-126)
 
 ```python
-feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_gdp", "avg_population"]
+# Features for clustering (GDP excluded for better separation)
+feature_cols = ["avg_co2", "avg_co2_per_capita", "avg_population"]
 assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
-
 cleaned_data = country_stats.na.drop()  # Remove NULLs
-
 scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
 ```
 
 **What it does:**
-- **VectorAssembler:** Combines 4 columns into a single vector
-  - `[52.3, 4.5, 220000000000, 10200000]` → vector
-- **StandardScaler:** Normalizes values (0-1)
-  - Why? GDP is much larger than CO2, without scaling clustering ignores small variables
+- **VectorAssembler:** Combines selected columns into a single vector
+- **StandardScaler:** Normalizes values so all features contribute equally
 
-**Before:**
-```
-avg_gdp: 220000000000 (HUGE)
-avg_co2: 52.3 (small)
-```
-
-**After (scaled):**
-```
-gdp_scaled: 0.35
-co2_scaled: 0.42
-```
+**Note:** GDP is excluded from clustering to improve separation between emission groups.
 
 ---
 
-### 6️⃣ **K-means Clustering** (lines 128-143)
+
+### 6️⃣ **Hybrid Clustering & Relabeling** (lines 128-143)
 
 ```python
 k = 3  # 3 clusters
 kmeans = KMeans(
-    k=k, 
-    featuresCol="scaled_features", 
-    predictionCol="cluster",
+    k=k,
+    featuresCol="scaled_features",
+    predictionCol="cluster_original",
     seed=42,
-    maxIter=20
+    maxIter=100
 )
-
 pipeline = Pipeline(stages=[assembler, scaler, kmeans])
 model = pipeline.fit(cleaned_data)
 results = model.transform(cleaned_data)
+
+# Relabel clusters by average CO2
+cluster_avg_co2 = results.groupBy("cluster_original").agg(avg("avg_co2").alias("avg_co2_in_cluster")).collect()
+cluster_mapping = sorted(
+    [(row["cluster_original"], row["avg_co2_in_cluster"]) for row in cluster_avg_co2],
+    key=lambda x: x[1]
+)
+relabel_map = {cluster_mapping[i][0]: i for i in range(len(cluster_mapping))}
+# Apply relabeling
+# ... (see code for details)
+results = results.withColumn("cluster", mapping_expr)
 ```
 
 **What it does:**
-- **K-means:** Clustering algorithm (groups similar data)
-- **k=3:** Creates 3 country groups
-- **seed=42:** Ensures reproducible results
-- **Pipeline:** Executes assembler → scaler → kmeans in sequence
+- Performs K-means clustering (k=3) on scaled features
+- Relabels clusters by average CO2: 0 = Low, 1 = Mid, 2 = High emitters
+- Prints cluster info for debugging and interpretation
 
-**Result:** Each country receives a `cluster` (0, 1, or 2)
+**Result:** Each country receives a `cluster` label (Low/Mid/High emitters)
 
 **Example:**
 ```
-Country    | avg_co2 | avg_gdp | cluster
------------|---------|---------|--------
-Portugal   | 52.3    | 2.2e11  | 1
-USA        | 5000.0  | 2.1e13  | 2
-Chad       | 2.5     | 1.1e10  | 0
+Country    | avg_co2 | cluster
+-----------|---------|--------
+Portugal   | 52.3    | 1 (Mid)
+USA        | 5000.0  | 2 (High)
+Chad       | 2.5     | 0 (Low)
 ```
 
 **Cluster Interpretation:**
-- **Cluster 0:** Low CO2, low GDP (developing countries)
-- **Cluster 1:** Medium CO2, medium GDP (developed middle-income)
-- **Cluster 2:** High CO2, high GDP (large/industrialized countries)
+- **Cluster 0 (Low):** Low CO2 emitters
+- **Cluster 1 (Mid):** Medium CO2 emitters
+- **Cluster 2 (High):** High CO2 emitters
+
+**Note:** Cluster labels are now guaranteed to match emission levels, not arbitrary K-means output.
 
 ---
 
