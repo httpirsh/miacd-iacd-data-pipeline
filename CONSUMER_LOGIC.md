@@ -98,28 +98,45 @@ all_data = all_data.filter(
 
 ### 4️⃣ **Country Aggregation** (lines 93-100)
 
+
 ```python
 country_stats = all_data.groupBy("country", "iso_code").agg(
     avg("co2").alias("avg_co2"),
     avg("co2_per_capita").alias("avg_co2_per_capita"),
     avg("gdp").alias("avg_gdp"),
     avg("population").alias("avg_population"),
+    count("*").alias("data_points"),
+    min("year").alias("first_year"),
+    max("year").alias("last_year"),
+    avg(when(col("year") >= 2010, col("co2")).alias("avg_co2_recent"))
+)
+# Log excluded countries for debugging
+excluded = all_data.groupBy("country", "iso_code").agg(
     count("*").alias("data_points")
-).filter((col("avg_co2").isNotNull()) & (col("data_points") >= 5))
+).filter(col("data_points") < 1)
+excluded_countries = [row['country'] for row in excluded.collect()]
+if excluded_countries:
+    print(f"Excluded countries (less than 1 year of data): {excluded_countries}")
+country_stats = country_stats.filter(
+    (col("avg_co2").isNotNull()) & 
+    (col("avg_co2_per_capita").isNotNull()) & 
+    (col("data_points") >= 1)
+)
 ```
 
 **What it does:**
 - Groups data by **country**
 - Calculates **averages** of all variables (CO2, GDP, population)
 - Counts how many records (years) each country has
-- Keeps only countries with ≥5 years of data
+- Keeps only countries with ≥1 year of data (previously 5)
+- Logs excluded countries for debugging
 
 **Example result:**
 ```
-Country    | avg_co2 | avg_gdp       | avg_population
------------|---------|---------------|---------------
-Portugal   | 52.3    | 220000000000  | 10200000
-Germany    | 850.2   | 3800000000000 | 83000000
+Country    | avg_co2 | avg_gdp       | avg_population | data_points
+-----------|---------|---------------|---------------|------------
+Portugal   | 52.3    | 220000000000  | 10200000      | 10
+Chad       | 2.5     | 11000000000   | 15000000      | 1
 ```
 
 ---
