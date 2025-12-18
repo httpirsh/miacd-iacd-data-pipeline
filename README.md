@@ -64,7 +64,7 @@ Streaming pipeline that cleans data, aggregates by country, performs K-means clu
 
 ## ML Clustering
 
-K-means clustering (k=3) with Silhouette Score ~0.7. See [`CONSUMER_LOGIC.md`](CONSUMER_LOGIC.md) for algorithm details.
+K-means clustering (k=3) with Silhouette Score ~0.84. See [`CONSUMER_LOGIC.md`](CONSUMER_LOGIC.md) for algorithm details.
 
 ## Useful Commands
 

@@ -171,6 +171,7 @@ def process_clustering(batch_df, batch_id):
             "country", "iso_code", "avg_co2", "avg_co2_per_capita", 
             "avg_gdp", "avg_population", "data_points",
             "first_year", "last_year", "avg_co2_recent", "cluster"
+
         ).withColumn("batch_id", lit(batch_id)).select(
             "batch_id", "country", "iso_code", "avg_co2", "avg_co2_per_capita",
             "avg_gdp", "avg_population", "data_points", "first_year", "last_year",
@@ -225,7 +226,7 @@ def create_kafka_stream():
         print(f"failed to create Kafka stream: {str(e)}")
         raise
 
-# LOCAL MODE - sufficient for this dataset size (23K records)
+# LOCAL MODE - sufficient for this dataset size 
 spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
 
 # CLUSTER MODE - distributed processing (currently not used due to networking complexity in Kubernetes)
