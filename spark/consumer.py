@@ -200,6 +200,7 @@ def process_clustering(batch_df, batch_id):
             "country", "iso_code", "avg_co2", "avg_co2_per_capita", 
             "avg_gdp", "avg_population", "data_points",
             "first_year", "last_year", "avg_co2_recent", "cluster"
+
         ).withColumn("batch_id", lit(batch_id)).select(
             "batch_id", "country", "iso_code", "avg_co2", "avg_co2_per_capita",
             "avg_gdp", "avg_population", "data_points", "first_year", "last_year",
@@ -207,8 +208,11 @@ def process_clustering(batch_df, batch_id):
         )
 
         cluster_stats_db = cluster_stats.withColumn("batch_id", lit(batch_id)) \
-                                         .withColumn("silhouette_score", lit(silhouette_score))
-
+                                         .withColumn("silhouette_score", lit(silhouette_score)) \
+                                         .select("batch_id", "cluster", "num_countries", 
+                                                 "avg_co2_cluster", "avg_co2_per_capita_cluster", 
+                                                 "avg_gdp_cluster", "silhouette_score")
+        
         print("saving to postgreSQL!!")
         save_to_postgresql(results_for_db, batch_id, "co2_clusters")
         save_to_postgresql(cluster_stats_db, batch_id, "cluster_stats")
@@ -255,8 +259,7 @@ def create_kafka_stream():
         print(f"failed to create Kafka stream: {str(e)}")
         raise
 
-
-# LOCAL MODE - sufficient for this dataset size (23K records)
+# LOCAL MODE - sufficient for this dataset size 
 spark = SparkSession.builder.appName("CO2EmissionsClustering").getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")

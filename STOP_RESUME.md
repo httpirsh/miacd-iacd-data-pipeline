@@ -1,113 +1,90 @@
-# Guide: Stop and Resume the Project Safely 🛑▶️
+# Stop and Resume the Project
 
-This guide explains how to shut down everything without losing your data (Superset dashboards, database, etc.) and how to restart when you want to work again.
+## Stop
 
----
+1. In terminals with `port-forward`, press **Ctrl+C** to stop
+2. Run:
+   ```bash
+   minikube stop
+   ```
 
-## 🛑 How to Stop (Safe Shutdown)
-
-### 1. Stop Port-Forwards
-In terminals where you have `kubectl port-forward` commands running:
-- Press **Ctrl + C** to stop the process
-- You can close those terminal windows
-
-### 2. Stop Minikube
-This command "freezes" the Kubernetes cluster and saves all state (including disks/volumes).
-```bash
-minikube stop
-```
-*Note: Don't use `minikube delete`, as that erases everything!*
-
-### 3. (Optional) Shut Down Computer
-Now you can safely shut down your computer. Data is saved in Minikube's disk.
+**Note:** Never use `minikube delete` - it erases everything!
 
 ---
 
-## ▶️ How to Resume (Return to Work)
+## Resume (Step-by-Step)
 
-When you want to return to the project:
-
-### 1. Start Minikube
+### Step 1: Start Minikube
 ```bash
 minikube start
 ```
-*Wait a few minutes until all pods are running.*
 
-### 2. Check Status
+### Step 2: Verify pods are running
 ```bash
 kubectl get pods
 ```
-*Wait until you see `Running` on all (Superset, Postgres, Spark, Kafka).*
+Wait until all pods show `STATUS: Running` (30-60 seconds).
 
-### 3. Reactivate Port-Forwards
-
-**Why do you need this?**  
-Services (Superset, PostgreSQL, Spark) use `ClusterIP`, which means they're only accessible **inside** the Kubernetes cluster. To access from outside (your browser or computer), you need to create "tunnels" with `kubectl port-forward`.
-
-#### ✅ **REQUIRED - Superset Port-Forward**
-
-This is the **ONLY** port-forward you **always** need:
-
-**Terminal 1 (keep this terminal open!):**
+### Step 3: Run the pipeline
 ```bash
-kubectl port-forward svc/superset 8088:8088
+make run
+```
+This will open the Superset port-forward automatically.
+
+### Step 4: View logs (in another terminal)
+
+```bash
+# Spark Consumer (data processing) - MOST IMPORTANT
+kubectl logs deployment/spark-consumer --tail=50
+
+# Kafka Producer (data sending)
+kubectl logs job/kafka-producer --tail=30
+
+# Kafka Broker
+kubectl logs kafka-0 --tail=30
+
+# PostgreSQL
+kubectl logs deployment/postgres --tail=30
+
+# Superset
+kubectl logs deployment/superset --tail=30
 ```
 
-Then open browser: `http://localhost:8088` (admin / admin)
+**Follow logs in real-time** (add `-f`):
+```bash
+kubectl logs deployment/spark-consumer -f
+```
 
-**Note:** While this terminal is open, Superset works. If you close the terminal, Superset becomes inaccessible (but continues running in the cluster).
+### Step 5: Access Superset
+
+Open: http://localhost:8088
+- **Username:** admin
+- **Password:** admin
 
 ---
 
-#### ⚠️ **OPTIONAL - Other Port-Forwards**
+## Optional port-forwards
 
-**You only need these IF you want to:**
+Only needed if you want direct access:
 
-**PostgreSQL (Terminal 2 - OPTIONAL):**
 ```bash
+# PostgreSQL (for pgAdmin)
 kubectl port-forward svc/postgres 5432:5432
-```
-**When to use:** If you want to access PostgreSQL with DBeaver, pgAdmin or `psql` to view data directly.  
-**Not needed if:** You only use Superset (Superset already accesses PostgreSQL internally).
 
-**Spark Master UI (Terminal 3 - OPTIONAL):**
-```bash
+# Spark UI (to see stats)
 kubectl port-forward svc/spark-master 8080:8080
 ```
-**When to use:** If you want to see Spark statistics (connected workers, memory usage, jobs).  
-**Not needed if:** You just want the pipeline to work (not necessary for the project).
 
 ---
 
-### 4. Access Services
+## What is saved
 
-**What you can access (with active port-forwards):**
+- Superset dashboards
+- PostgreSQL data
+- Kafka data
 
-| Service | URL | Credentials | Port-Forward Required? |
-|---------|-----|-------------|------------------------|
-| **Superset** | `http://localhost:8088` | admin / admin | ✅ **YES (required)** |
-| PostgreSQL | `localhost:5432` | postgres / postgres | ⚠️ Only if you want access |
-| Spark UI | `http://localhost:8080` | - | ⚠️ Only for curiosity |
+## What is lost
 
----
-
-### 5. What's Saved vs. What's Lost
-
-**✅ Data that persists after `minikube stop`:**
-- Superset dashboards (saved in persistent volume)
-- All PostgreSQL data (tables, records)
-- Superset configurations and datasets
-- Kafka data (StatefulSet volume)
-
-**❌ What's lost:**
-- Messages still in transit in Kafka (not persisted)
-- Spark jobs mid-execution (will restart)
-- Port-forwards (you need to reopen when you return)
-
-**Conclusion:** When you run `minikube start` after `minikube stop`, **everything returns exactly as it was!** You just need to reopen the Superset port-forward.
-
----
-
-## ⚠️ What to NEVER do if you want to keep data
-- ❌ **NEVER run `minikube delete`** (deletes the entire cluster)
-- ❌ **NEVER run `kubectl delete pvc --all`** (deletes persistent disks)
+- Kafka messages in transit
+- Spark jobs mid-execution
+- Port-forwards (need to reopen)

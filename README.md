@@ -64,7 +64,7 @@ Streaming pipeline that cleans data, aggregates by country, performs K-means clu
 
 ## ML Clustering
 
-Hybrid clustering: The Spark consumer uses K-means (k=3) followed by relabeling clusters by average CO2 emissions, ensuring clear Low/Mid/High emitter groups. GDP is excluded from clustering features for better separation. Cluster labels are guaranteed to match emission levels, not arbitrary K-means output. See [`CONSUMER_LOGIC.md`](CONSUMER_LOGIC.md) for full algorithm details and rationale.
+K-means clustering (k=3) with Silhouette Score ~0.84. See [`CONSUMER_LOGIC.md`](CONSUMER_LOGIC.md) for algorithm details.
 
 ## Useful Commands
 
