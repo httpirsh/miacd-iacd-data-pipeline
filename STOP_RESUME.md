@@ -41,6 +41,28 @@ kubectl port-forward svc/postgres 5432:5432
 kubectl port-forward svc/spark-master 8080:8080
 ```
 
+## View Logs
+
+```bash
+# Spark Consumer (data processing)
+kubectl logs deployment/spark-consumer --tail=50
+
+# Kafka Producer (data sending)
+kubectl logs -l app=kafka-producer --tail=30
+
+# Kafka Broker
+kubectl logs kafka-0 --tail=30
+
+# PostgreSQL
+kubectl logs deployment/postgres --tail=30
+
+# Superset
+kubectl logs deployment/superset --tail=30
+
+# Follow logs in real-time (add -f)
+kubectl logs deployment/spark-consumer -f
+```
+
 ## What is saved
 
 - Superset dashboards
