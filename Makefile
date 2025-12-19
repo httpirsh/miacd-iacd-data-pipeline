@@ -4,7 +4,7 @@ all: run
 
 minikube:
 	@echo "--- Starting Minikube ---"
-	minikube start --cpus=4 --memory=3072 --force
+	minikube start --cpus=4 --memory=8192
 
 build: producer consumer superset
 
@@ -40,3 +40,5 @@ run: deploy
 	@echo "--- Accessing Superset (Port Forwarding) ---"
 	@echo "Access Superset at http://localhost:8088 (admin/admin)"
 	kubectl port-forward service/superset 8088:8088
+
+# Whenever you do minikube delete, also do rm -rf .make!​
