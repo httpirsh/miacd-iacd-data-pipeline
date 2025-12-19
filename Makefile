@@ -37,8 +37,12 @@ deploy: build
 	kubectl apply -f kubernetes/
 
 run: deploy
+	@echo "--- Waiting for Superset to be ready ---"
+	@kubectl wait --for=condition=ready pod -l app=superset --timeout=300s || true
+	@echo "--- Waiting for Superset service to start (30 seconds) ---"
+	@sleep 30
 	@echo "--- Accessing Superset (Port Forwarding) ---"
 	@echo "Access Superset at http://localhost:8088 (admin/admin)"
 	kubectl port-forward service/superset 8088:8088
 
-# Whenever you do minikube delete, also do rm -rf .make!​
+# Whenever you do minikube delete, also do rm -rf .make!
