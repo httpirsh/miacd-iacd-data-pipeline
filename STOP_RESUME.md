@@ -10,26 +10,60 @@
 
 **Note:** Never use `minikube delete` - it erases everything!
 
-## Resume
+---
 
-1. Start minikube:
-   ```bash
-   minikube start
-   ```
+## Resume (Step-by-Step)
 
-2. Wait for pods to start:
-   ```bash
-   kubectl get pods
-   ```
+### Step 1: Start Minikube
+```bash
+minikube start
+```
 
-3. Open the Superset port-forward:
-   ```bash
-   kubectl port-forward svc/superset 8088:8088
-   ```
+### Step 2: Verify pods are running
+```bash
+kubectl get pods
+```
+Wait until all pods show `STATUS: Running` (30-60 seconds).
 
-4. Access Superset: http://localhost:8088 (admin / admin)
+### Step 3: Run the pipeline
+```bash
+make run
+```
+This will open the Superset port-forward automatically.
 
-### Optional port-forwards
+### Step 4: View logs (in another terminal)
+
+```bash
+# Spark Consumer (data processing) - MOST IMPORTANT
+kubectl logs deployment/spark-consumer --tail=50
+
+# Kafka Producer (data sending)
+kubectl logs job/kafka-producer --tail=30
+
+# Kafka Broker
+kubectl logs kafka-0 --tail=30
+
+# PostgreSQL
+kubectl logs deployment/postgres --tail=30
+
+# Superset
+kubectl logs deployment/superset --tail=30
+```
+
+**Follow logs in real-time** (add `-f`):
+```bash
+kubectl logs deployment/spark-consumer -f
+```
+
+### Step 5: Access Superset
+
+Open: http://localhost:8088
+- **Username:** admin
+- **Password:** admin
+
+---
+
+## Optional port-forwards
 
 Only needed if you want direct access:
 
@@ -41,27 +75,7 @@ kubectl port-forward svc/postgres 5432:5432
 kubectl port-forward svc/spark-master 8080:8080
 ```
 
-## View Logs
-
-```bash
-# Spark Consumer (data processing)
-kubectl logs deployment/spark-consumer --tail=50
-
-# Kafka Producer (data sending)
-kubectl logs -l app=kafka-producer --tail=30
-
-# Kafka Broker
-kubectl logs kafka-0 --tail=30
-
-# PostgreSQL
-kubectl logs deployment/postgres --tail=30
-
-# Superset
-kubectl logs deployment/superset --tail=30
-
-# Follow logs in real-time (add -f)
-kubectl logs deployment/spark-consumer -f
-```
+---
 
 ## What is saved
 
