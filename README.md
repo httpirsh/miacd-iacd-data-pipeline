@@ -41,11 +41,29 @@ All five components run as separate Kubernetes workloads on Minikube, each with 
 
 ## ML Clustering
 
-The consumer aggregates each country's data (average CO2, CO2 per capita, and population, requiring ≥5 data points) and runs a **K-means pipeline (k=3)**: `VectorAssembler` → `StandardScaler` → `KMeans`, evaluated with **Silhouette Score (~0.84)**.
+The consumer aggregates each country's data (average CO2, CO2 per capita, and population, requiring ≥5 data points) and runs a **K-means pipeline (k=3)**: `VectorAssembler` → `StandardScaler` → `KMeans`, evaluated with a **Silhouette Score of 0.84** (see [Results](#results)).
 
 K-means alone assigns arbitrary cluster IDs, so the consumer relabels the 3 resulting clusters by their average CO2 (lowest → `Low`, highest → `High`) after fitting — this guarantees consistent, human-readable labels across every streaming batch instead of IDs that could flip between runs.
 
 See [CONSUMER_LOGIC.md](CONSUMER_LOGIC.md) for the full step-by-step logic.
+
+## Results
+
+A full run over the dataset clusters 164 countries into three emissions profiles with a **Silhouette Score of 0.84**:
+
+| Cluster | Countries | Avg CO2 (MT) | Avg CO2/capita (t) | Avg GDP |
+|---|---|---|---|---|
+| High Emitters | 3 (United States, China, India) | 2,035 | 6.37 | $4.31T |
+| Mid Emitters | 5 | 36.9 | 29.77 | $72.2B |
+| Low Emitters | 156 | 50.7 | 2.69 | $147.8B |
+
+The clusters aren't just "big vs. small" — **Mid Emitters** is a handful of small, wealthy countries with modest total output but by far the *highest* per-capita emissions (29.77 t/person, vs. 6.37 for the High Emitters cluster), which the K-means feature set (CO2, CO2 per capita, population) picks up even though GDP isn't part of the clustering vector.
+
+![Cluster overview dashboard](docs/images/cluster-overview.png)
+*Superset dashboard: cluster distribution, silhouette score, and per-cluster averages.*
+
+![Multidimensional cluster analysis](docs/images/multidimensional-analysis.png)
+*GDP vs. emissions, per-capita comparison, a geospatial view, and the underlying per-country table.*
 
 ## Database Schema
 
@@ -117,6 +135,7 @@ Kafka 4.1.0 (KRaft) • Spark 4.0.1 • PostgreSQL 15 • Superset • Kubernete
 
 - [CONSUMER_LOGIC.md](CONSUMER_LOGIC.md) - Consumer logic details
 - [STOP_RESUME.md](STOP_RESUME.md) - How to stop and resume the project
+- [docs/report_iacd.pdf](docs/report_iacd.pdf) - Full project report (Portuguese)
 
 ## Contributors
 
